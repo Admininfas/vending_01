@@ -1,0 +1,1 @@
+Proyecto Odoo POS Vending
