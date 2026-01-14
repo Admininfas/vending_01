@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_vending_webhook_log_admin,vending.webhook.log.admin,model_vending_webhook_log,base.group_system,1,1,1,1
+access_vending_webhook_log_pos_manager,vending.webhook.log.pos.manager,model_vending_webhook_log,point_of_sale.group_pos_manager,1,0,0,0
+access_vending_webhook_log_pos_user,vending.webhook.log.pos.user,model_vending_webhook_log,point_of_sale.group_pos_user,1,0,0,0
