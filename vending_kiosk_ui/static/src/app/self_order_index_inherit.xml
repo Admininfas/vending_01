@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-inherit="pos_self_order.selfOrderIndex" t-inherit-mode="extension">
+        <xpath expr="//Router" position="inside">
+            <t t-set-slot="vending-process" route="`/pos-self/${selfOrder.config.id}/vending-process`">
+                <VendingProcessingScreen product="selfOrder.selectedVendingProduct"/>
+            </t>
+            <t t-set-slot="vending-success" route="`/pos-self/${selfOrder.config.id}/vending-success`">
+                <VendingSuccessScreen product="selfOrder.selectedVendingProduct" reference="selfOrder.vendingReference"/>
+            </t>
+            <t t-set-slot="vending-error" route="`/pos-self/${selfOrder.config.id}/vending-error`">
+                <VendingErrorScreen product="selfOrder.selectedVendingProduct" error="selfOrder.vendingErrorMessage" errorTitle="selfOrder.vendingErrorTitle"/>
+            </t>
+        </xpath>
+    </t>
+</templates>

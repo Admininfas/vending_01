@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- Vending Machine: List View -->
+    <record id="view_vending_machine_list" model="ir.ui.view">
+        <field name="name">vending.machine.list</field>
+        <field name="model">vending.machine</field>
+        <field name="arch" type="xml">
+            <list string="Máquinas Expendedoras">
+                <field name="name"/>
+                <field name="code"/>
+                <field name="pos_config_id"/>
+                <field name="warehouse_id"/>
+                <field name="countdown_seconds"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Vending Machine: Form View -->
+    <record id="view_vending_machine_form" model="ir.ui.view">
+        <field name="name">vending.machine.form</field>
+        <field name="model">vending.machine</field>
+        <field name="arch" type="xml">
+            <form string="Máquina Expendedora">
+                <sheet>
+                    <group>
+                        <group string="Información General">
+                            <field name="name"/>
+                            <field name="code"/>
+                            <field name="pos_config_id"/>
+                            <field name="warehouse_id"/>
+                            <field name="company_id" invisible="1"/>
+                        </group>
+                        <group string="Configuración de Tiempo" groups="vending_kiosk_core.group_vending_superadmin">
+                            <field name="countdown_seconds" groups="vending_kiosk_core.group_vending_superadmin"/>
+                            <field name="qr_timeout_seconds" groups="vending_kiosk_core.group_vending_superadmin"/>
+                        </group>
+                    </group>
+                    
+                    <group>
+                        <group string="Facturación y Pagos">
+                            <field name="invoice_journal_id" required="1" 
+                                   options="{'no_create': True}"/>
+                            <field name="payment_method_id" required="1" 
+                                   options="{'no_create': True}"
+                                   groups="vending_kiosk_core.group_vending_superadmin"/>
+                            <field name="anonymous_partner_id" required="1" 
+                                   options="{'no_create': True}"
+                                   groups="vending_kiosk_core.group_vending_superadmin"/>
+                        </group>
+                    </group>
+                    
+                    <notebook>
+                        <page string="Slots">
+                            <field name="slot_ids">
+                                <list editable="bottom">
+                                    <field name="code" width="150"/>
+                                    <field name="name"/>
+                                    <field name="product_tmpl_id"/>
+                                    <field name="location_id"/>
+                                    <field name="is_active"/>
+                                    <field name="current_stock"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action: Vending Machines -->
+    <record id="action_vending_machines" model="ir.actions.act_window">
+        <field name="name">Vending Machines</field>
+        <field name="res_model">vending.machine</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_vending_machine_list"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Create your first vending machine</p>
+        </field>
+    </record>
+</odoo>

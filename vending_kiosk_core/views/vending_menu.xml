@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+        <menuitem
+            id="menu_vending_root"
+            name="Expendedoras"
+            parent="point_of_sale.menu_point_config_product"
+            sequence="1"
+            groups="vending_kiosk_core.group_vending_viewer"/>
+
+        <menuitem
+            id="menu_vending_machines"
+            name="Máquinas"
+            parent="menu_vending_root"
+            action="action_vending_machines"
+            sequence="10"
+            groups="vending_kiosk_core.group_vending_admin"/>
+
+        <menuitem
+            id="menu_vending_slots"
+            name="Slots"
+            parent="menu_vending_root"
+            action="action_vending_slots"
+            sequence="20"
+            groups="vending_kiosk_core.group_vending_admin"/>
+            
+    </data>
+</odoo>

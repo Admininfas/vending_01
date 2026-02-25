@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- Extensión de pos.order para botón de webhook logs -->
+    <record id="view_pos_order_form_webhook_log" model="ir.ui.view">
+        <field name="name">pos.order.form.webhook.log</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="arch" type="xml">
+            <!-- Botón de Webhook Logs en el oe_button_box del header -->
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_open_webhook_logs" type="object" class="oe_stat_button" icon="fa-plug" invisible="vending_reference == False">
+                    <field name="vending_reference" widget="statinfo" string="Webhooks"/>
+                </button>
+            </xpath>
+        </field>
+    </record>
+</odoo>

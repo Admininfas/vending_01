@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- Extend POS Config Form to add Vending Machine field -->
+    <record id="pos_config_form_vending_machine" model="ir.ui.view">
+        <field name="name">pos.config.form.vending.machine</field>
+        <field name="model">pos.config</field>
+        <field name="inherit_id" ref="point_of_sale.pos_config_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@groups='base.group_system']" position="before">
+                <separator string="Configuración de Máquina Expendedora" name="vending_machine_separator"/>
+                <setting string="Máquina Expendedora" name="vending_machine_setting" help="Selecciona una máquina expendedora desde 'Punto de venta > Configuración > Expendedoras > Máquinas'">
+                    <field name="vending_machine_id" placeholder="Selecciona o crea una máquina..." readonly="1"/>
+                </setting>
+                <div invisible="not vending_machine_id">
+                    <setting string="Tiempo de espera" name="vending_countdown_setting" help="Tiempo en segundos antes de volver automáticamente al menú principal" groups="vending_kiosk_core.group_vending_superadmin">
+                        <field name="vending_countdown_seconds"/>
+                    </setting>
+                    <setting string="Timeout de QR" name="vending_qr_timeout_setting" help="Tiempo en segundos de vida del QR de pago antes de expirar" groups="vending_kiosk_core.group_vending_superadmin">
+                        <field name="vending_qr_timeout_seconds"/>
+                    </setting>
+                    <separator string="Configuración de Facturación y Stock (Solo lectura)"/>
+                    <setting string="Diario de facturas" name="vending_invoice_journal_setting" help="Diario donde se crearán las facturas de vending" groups="vending_kiosk_core.group_vending_superadmin">
+                        <field name="vending_invoice_journal_id"/>
+                    </setting>
+                </div>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Hide "To Close" badge on kanban for vending machine POS configs -->
+    <record id="pos_config_kanban_hide_to_close" model="ir.ui.view">
+        <field name="name">pos.config.kanban.hide.to.close.vending</field>
+        <field name="model">pos.config</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_config_kanban"/>
+        <field name="arch" type="xml">
+            <!-- Load vending_machine_id field into the kanban -->
+            <xpath expr="//field[@name='statistics_for_current_session']" position="after">
+                <field name="vending_machine_id"/>
+            </xpath>
+            <!-- Exclude vending machines from the "To Close" warning (4th div inside card_title) -->
+            <!-- <xpath expr="//div[@name='card_title']/div[4]" position="attributes">
+                <attribute name="t-if">record.pos_session_state.raw_value == 'opened' and record.pos_session_duration.raw_value &gt; 1 and not record.vending_machine_id.raw_value</attribute>
+            </xpath> -->
+        </field>
+    </record>
+</odoo>

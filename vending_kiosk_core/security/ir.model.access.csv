@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_vending_machine_admin,vending.machine admin,model_vending_machine,vending_kiosk_core.group_vending_admin,1,1,1,1
+access_vending_machine_viewer,vending.machine viewer,model_vending_machine,vending_kiosk_core.group_vending_viewer,1,0,0,0
+access_vending_slot_admin,vending.slot admin,model_vending_slot,vending_kiosk_core.group_vending_admin,1,1,1,1
+access_vending_slot_viewer,vending.slot viewer,model_vending_slot,vending_kiosk_core.group_vending_viewer,1,0,0,0

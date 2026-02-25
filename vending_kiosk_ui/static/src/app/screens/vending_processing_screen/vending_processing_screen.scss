@@ -1,0 +1,114 @@
+// ============================================
+// Vending Processing Screen Styles
+// Fluid / responsive sizing for kiosk displays
+// ============================================
+//
+// NOTE: CSS min()/clamp() with mixed units (px + vw/vmin) must be wrapped in
+// unquote("...") so the SCSS compiler treats them as opaque strings and
+// does NOT try to evaluate them at compile time.
+
+.o_self_vending_processing {
+    background: #ffffff;
+    min-height: 100vh;
+    min-height: 100dvh;
+
+    .o_self_vending_card {
+        width: unquote("min(90vw, 720px)");
+        border-radius: unquote("clamp(12px, 2vmin, 24px)");
+        border: none;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+
+        .card-body {
+            padding: unquote("clamp(1rem, 4vmin, 2.5rem)") !important;
+        }
+    }
+
+    // QR code – scales with the smaller viewport dimension
+    .o_self_vending_qr {
+        width:  unquote("clamp(140px, 35vmin, 360px)");
+        height: unquote("clamp(140px, 35vmin, 360px)");
+        object-fit: contain;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    }
+
+    // Fallback status icons (error / expired states)
+    .o_vending_status_icon {
+        font-size: unquote("clamp(3rem, 10vmin, 6rem)");
+    }
+
+    // Timer badge
+    .o_vending_timer {
+        font-size: unquote("clamp(0.85rem, 2.5vmin, 1.25rem)");
+        transition: all 0.3s ease;
+
+        &.o_timer_warning {
+            background-color: rgba(var(--bs-warning-rgb), 0.25);
+            animation: timerPulse 1s ease-in-out infinite;
+        }
+    }
+
+    // Product thumbnail inside the info card
+    .o_vending_product_image {
+        width:  unquote("clamp(72px, 16vmin, 160px)");
+        height: unquote("clamp(72px, 16vmin, 160px)");
+        object-fit: cover;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    // Fluid typography
+    h3.h4 {
+        font-size: unquote("clamp(1.1rem, 3.5vmin, 1.8rem)");
+    }
+
+    p.text-muted {
+        font-size: unquote("clamp(0.875rem, 2.2vmin, 1.15rem)");
+    }
+
+    // Fluid buttons
+    .btn-lg {
+        padding: unquote("clamp(0.5rem, 2vmin, 1rem)") unquote("clamp(1.2rem, 5vmin, 2.8rem)");
+        font-size: unquote("clamp(0.875rem, 2.5vmin, 1.15rem)");
+    }
+
+    .btn-danger {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        border: none;
+        box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+        &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+            background: linear-gradient(135deg, #e4495a 0%, #d32f3f 100%);
+        }
+
+        &:active { transform: translateY(0); }
+    }
+
+    .btn-primary {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+        &:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        &:active { transform: translateY(0); }
+    }
+}
+
+// QR entry animation
+.o_self_vending_qr {
+    animation: qrFadeIn 0.5s ease-in;
+}
+
+@keyframes qrFadeIn {
+    0%   { opacity: 0; transform: scale(0.9); }
+    100% { opacity: 1; transform: scale(1);   }
+}
+
+@keyframes timerPulse {
+    0%, 100% { transform: scale(1);    }
+    50%       { transform: scale(1.05); }
+}

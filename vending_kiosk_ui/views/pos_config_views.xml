@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- 
+        Vista Kanban para modo Vending.
+        Hereda de pos_self_order.pos_self_order_menu_item para agregar los botones
+        "Iniciar Vending", "Cerrar sesión" y "Abrir Vending" cuando self_ordering_mode == 'vending'.
+        
+        La lógica replica el comportamiento de kiosk:
+        - No requiere apertura manual de caja registradora
+        - La sesión se crea automáticamente con set_opening_control(0, "")
+        
+        Estructura basada en el código original de Odoo pos_self_order.
+    -->
+    <record id="pos_vending_kanban_view" model="ir.ui.view">
+        <field name="name">pos.config.kanban.view.inherit.vending</field>
+        <field name="model">pos.config</field>
+        <field name="inherit_id" ref="pos_self_order.pos_self_order_menu_item" />
+        <field name="arch" type="xml">
+            <!-- Agregar botones para modo vending después de card_left (igual que kiosk) -->
+            <xpath expr="//div[@name='card_left']" position="after">
+                <!-- Campos invisibles necesarios para la lógica de los botones -->
+                <field name="self_ordering_mode" invisible="1" />
+                <field name="current_session_id" invisible="1" />
+                <!-- Contenedor de botones vending -->
+                <div class="col-6 d-flex flex-wrap align-items-center gap-2"
+                    invisible="not self_ordering_mode == 'vending'">
+                    <!-- Botón para iniciar vending (sin sesión activa) -->
+                    <button t-if="!record.current_session_id.raw_value"
+                        class="btn btn-primary pos_open_session_btn"
+                        name="action_open_vending"
+                        type="object">
+                        Iniciar Vending
+                    </button>
+                    <!-- Botón para cerrar sesión (con sesión activa) -->
+                    <button t-else=""
+                        name="action_close_vending_session"
+                        class="btn btn-secondary"
+                        type="object">
+                        Cerrar sesión
+                    </button>
+                    <!-- Botón para abrir vending (con sesión activa) -->
+                    <button t-if="record.current_session_id.raw_value"
+                        class="btn btn-secondary"
+                        name="action_open_vending"
+                        type="object">
+                        Abrir Vending
+                    </button>
+                </div>
+            </xpath>
+
+            <!-- Ocultar card_left cuando es modo vending (igual que kiosk) -->
+            <xpath expr="//div[@name='card_left']" position="attributes">
+                <attribute name="invisible">self_ordering_mode == 'kiosk' or self_ordering_mode == 'vending'</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="pos_config_form_vending_machine_inherit_vending" model="ir.ui.view">
+        <field name="name">pos.config.form.vending.machine.inherit.vending</field>
+        <field name="model">pos.config</field>
+        <field name="inherit_id" ref="vending_kiosk_core.pos_config_form_vending_machine" />
+        <field name="arch" type="xml">
+            <xpath expr="//setting[@name='vending_machine_setting']" position="attributes">
+                <attribute name="invisible">self_ordering_mode != 'vending'</attribute>
+            </xpath>
+            <xpath expr="//setting[@name='vending_countdown_setting']" position="attributes">
+                <attribute name="invisible">self_ordering_mode != 'vending'</attribute>
+            </xpath>
+            <xpath expr="//setting[@name='vending_qr_timeout_setting']" position="attributes">
+                <attribute name="invisible">self_ordering_mode != 'vending'</attribute>
+            </xpath>
+            <xpath expr="//separator[@name='vending_machine_separator']" position="attributes">
+                <attribute name="invisible">self_ordering_mode != 'vending'</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>

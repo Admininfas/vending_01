@@ -1,0 +1,17 @@
+// ============================================
+// Product Card Vending Enhancements
+// ============================================
+
+.o_vending_slots_info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 8px;
+    background-color: rgba(0, 123, 255, 0.08);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    
+    .fw-semibold {
+        color: #212529;
+    }
+}

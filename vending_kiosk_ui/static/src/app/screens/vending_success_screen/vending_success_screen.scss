@@ -1,0 +1,78 @@
+// ============================================
+// Vending Success Screen Styles
+// Fluid / responsive sizing for kiosk displays
+// ============================================
+
+$vending-success-gradient-start: #e8f5e9;
+$vending-success-gradient-end:   #c8e6c9;
+
+.o_self_vending_success {
+    background: linear-gradient(135deg, $vending-success-gradient-start 0%, $vending-success-gradient-end 100%);
+    min-height: 100vh;
+    min-height: 100dvh;
+
+    .o_self_vending_card {
+        width: unquote("min(90vw, 720px)");
+        border-radius: unquote("clamp(12px, 2vmin, 24px)");
+        border: none;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+
+        .card-body {
+            padding: unquote("clamp(1rem, 4vmin, 2.5rem)") !important;
+        }
+    }
+
+    .o_self_vending_image {
+        width:  unquote("clamp(80px, 18vmin, 180px)");
+        height: unquote("clamp(80px, 18vmin, 180px)");
+        object-fit: cover;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    h3 {
+        font-size: unquote("clamp(1.3rem, 4vmin, 2.2rem)");
+    }
+
+    p {
+        font-size: unquote("clamp(0.9rem, 2.2vmin, 1.2rem)");
+    }
+
+    .btn-lg {
+        padding: unquote("clamp(0.5rem, 2vmin, 1rem)") unquote("clamp(1.2rem, 5vmin, 2.8rem)");
+        font-size: unquote("clamp(0.875rem, 2.5vmin, 1.15rem)");
+    }
+}
+
+// Icono de éxito y animaciones
+.o_success_icon_container {
+    display: inline-block;
+    animation: successPulse 2s ease-in-out infinite;
+}
+
+.o_success_icon {
+    font-size: unquote("clamp(3.5rem, 12vmin, 7rem)");
+    animation: successBounce 0.6s ease-out;
+}
+
+@keyframes successBounce {
+    0% {
+        transform: scale(0);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.2);
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes successPulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}

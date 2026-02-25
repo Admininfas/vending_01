@@ -1,0 +1,97 @@
+// ============================================
+// Vending Error Screen Styles
+// Fluid / responsive sizing for kiosk displays
+// ============================================
+
+$vending-error-gradient-start: #ffeaa7;
+$vending-error-gradient-end:   #fab1a0;
+
+.o_self_vending_error {
+    background: linear-gradient(135deg, $vending-error-gradient-start 0%, $vending-error-gradient-end 100%);
+    min-height: 100vh;
+    min-height: 100dvh;
+
+    .o_self_vending_card {
+        width: unquote("min(90vw, 720px)");
+        border-radius: unquote("clamp(12px, 2vmin, 24px)");
+        border: none;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+
+        .card-body {
+            padding: unquote("clamp(1rem, 4vmin, 2.5rem)") !important;
+        }
+    }
+
+    .o_self_vending_image {
+        width:  unquote("clamp(80px, 18vmin, 180px)");
+        height: unquote("clamp(80px, 18vmin, 180px)");
+        object-fit: cover;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    h3 {
+        font-size: unquote("clamp(1.3rem, 4vmin, 2.2rem)");
+    }
+
+    p {
+        font-size: unquote("clamp(0.9rem, 2.2vmin, 1.2rem)");
+    }
+
+    .btn-lg {
+        padding: unquote("clamp(0.5rem, 2vmin, 1rem)") unquote("clamp(1.2rem, 5vmin, 2.8rem)");
+        font-size: unquote("clamp(0.875rem, 2.5vmin, 1.15rem)");
+    }
+
+    // Caja de ayuda
+    .o_vending_help_box {
+        background-color: #f8f9fa;
+        border-color: #dee2e6 !important;
+
+        .o_help_icon,
+        .o_help_title {
+            color: #495057;
+        }
+
+        .o_help_text {
+            color: #6c757d;
+            font-size: unquote("clamp(0.8rem, 2vmin, 1rem)");
+        }
+    }
+}
+
+// Icono de error y animaciones
+.o_error_icon_container {
+    display: inline-block;
+    animation: errorShake 2s ease-in-out infinite;
+}
+
+.o_error_icon {
+    font-size: unquote("clamp(3.5rem, 12vmin, 7rem)");
+    animation: errorBounce 0.6s ease-out;
+}
+
+@keyframes errorBounce {
+    0% {
+        transform: scale(0);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.2);
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes errorShake {
+    0%, 100% {
+        transform: translateX(0);
+    }
+    10%, 30%, 50%, 70%, 90% {
+        transform: translateX(-2px);
+    }
+    20%, 40%, 60%, 80% {
+        transform: translateX(2px);
+    }
+}
