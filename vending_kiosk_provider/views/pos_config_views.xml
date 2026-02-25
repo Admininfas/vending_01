@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!--
+        Alerta persistente en la configuración del POS cuando el proveedor
+        de pagos opera en modo dummy (sin URL externa configurada).
+    -->
+    <record id="pos_config_form_dummy_alert" model="ir.ui.view">
+        <field name="name">pos.config.form.dummy.alert</field>
+        <field name="model">pos.config</field>
+        <field name="inherit_id" ref="vending_kiosk_core.pos_config_form_vending_machine"/>
+        <field name="arch" type="xml">
+            <xpath expr="//separator[@name='vending_machine_separator']" position="before">
+                <field name="vending_is_dummy_mode" invisible="1"/>
+                <div class="alert alert-warning" role="alert"
+                     invisible="not vending_is_dummy_mode or not vending_machine_id">
+                    <strong>⚠ Modo Dummy activo:</strong>
+                    El proveedor de pagos está usando el endpoint local de pruebas.
+                    Los webhooks y QR no se comunican con Winfas.
+                    <br/>
+                    Para conectar con producción, configure
+                    <em>vending.provider_base_url</em> en
+                    <strong>Ajustes → Técnicos → Parámetros del Sistema</strong>.
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

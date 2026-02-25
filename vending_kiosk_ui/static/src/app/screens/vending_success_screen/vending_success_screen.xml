@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="vending_kiosk_ui.VendingSuccessScreen">
+        <div class="o_self_vending_success d-flex align-items-center justify-content-center h-100 w-100">
+            <div class="card shadow-sm o_self_vending_card">
+                <div class="card-body text-center p-4">
+                    <!-- Icono de éxito animado -->
+                    <div class="mb-4">
+                        <div class="o_success_icon_container">
+                            <i class="fa fa-check-circle text-success o_success_icon"/>
+                        </div>
+                    </div>
+
+                    <h2 class="h3 mb-2 text-success">¡Entrega confirmada!</h2>
+                    <p class="text-muted mb-4">El producto fue entregado correctamente</p>
+
+                    <!-- Estado de entrega -->
+                    <div class="mb-4 p-3 border rounded-3 bg-success border-success">
+                        <div class="d-flex align-items-center justify-content-center mb-2">
+                            <i class="fa fa-gift text-white me-2"/>
+                            <span class="fw-semibold text-white">Producto entregado</span>
+                        </div>
+                        <p class="text-white small mb-0">Gracias por su compra</p>
+                    </div>
+
+                    <!-- Producto comprado -->
+                    <t t-if="product">
+                        <div class="border rounded-3 p-3 bg-light mb-4">
+                            <div class="mb-3 text-center">
+                                <img 
+                                    class="rounded-4 object-fit-cover o_self_vending_image" 
+                                    t-attf-src="/web/image/product.template/#{product.product_tmpl_id?.id or product.id}/image_512?unique=#{product.write_date}"
+                                    loading="lazy"
+                                    t-att-alt="product.display_name"
+                                />
+                            </div>
+                            <div class="fw-semibold mb-1">Producto adquirido</div>
+                            <div class="mb-1" t-esc="product.display_name"/>
+                            <div class="text-success fw-bold" t-esc="formattedPrice"/>
+                        </div>
+                    </t>
+
+                    <!-- Countdown y botón -->
+                    <div class="mt-4">
+                        <p class="text-muted small mb-3">
+                            Volviendo al menú en <span class="fw-bold" t-esc="state.countdown"/> segundos...
+                        </p>
+                        <button type="button" class="btn btn-primary btn-lg" t-on-click="onClickGoToMenu">
+                            <i class="fa fa-home me-2"/>
+                            Volver al menú
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>

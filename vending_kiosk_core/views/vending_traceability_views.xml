@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        
+        <!-- Vista formulario de factura con campo de vending -->
+        <record id="view_account_move_form_vending" model="ir.ui.view">
+            <field name="name">account.move.form.vending</field>
+            <field name="model">account.move</field>
+            <field name="inherit_id" ref="account.view_move_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='partner_id']" position="after">
+                    <field name="vending_order_id" invisible="not is_vending_invoice" readonly="1"/>
+                    <field name="is_vending_invoice" invisible="1"/>
+                </xpath>
+            </field>
+        </record>
+        
+        
+        <!-- Vista formulario de entrega con campos de vending -->
+        <record id="view_stock_picking_form_vending" model="ir.ui.view">
+            <field name="name">stock.picking.form.vending</field>
+            <field name="model">stock.picking</field>
+            <field name="inherit_id" ref="stock.view_picking_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='partner_id']" position="after">
+                    <field name="vending_order_id" invisible="not is_vending_delivery" readonly="1"/>
+                    <field name="vending_machine_id" invisible="not is_vending_delivery" readonly="1"/>
+                    <field name="is_vending_delivery" invisible="1"/>
+                </xpath>
+            </field>
+        </record>
+        
+        
+    </data>
+</odoo>

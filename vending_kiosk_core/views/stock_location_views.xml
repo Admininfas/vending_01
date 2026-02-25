@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- Extender stock.location para mostrar slots de vending -->
+    <record id="stock_location_form_vending" model="ir.ui.view">
+        <field name="name">stock.location.form.vending</field>
+        <field name="model">stock.location</field>
+        <field name="inherit_id" ref="stock.view_location_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <group>
+                    <group string="Expendedora" name="vending_info">
+                        <field name="vending_slot_id" readonly="1" />
+                    </group>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>

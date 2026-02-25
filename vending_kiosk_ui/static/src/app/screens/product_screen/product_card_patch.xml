@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <!-- Parche para agregar información de slots en las cards de productos -->
+    <t t-inherit="pos_self_order.ProductListPage" t-inherit-mode="extension">
+        <!-- Agregar slots después del precio del producto -->
+        <xpath expr="//span[hasclass('o-so-tabular-nums')]" position="after">
+            <!-- <t t-if="selfOrder.config.self_ordering_mode === 'vending' and product.public_description">
+                <div class="o_vending_product_public_desc mt-1 mt-lg-2 small text-muted"
+                     t-out="product.public_description"/>
+            </t> -->
+            <t t-if="selfOrder.config.self_ordering_mode === 'vending' and product._vending_slots and product._vending_slots.length > 0">
+                <div class="o_vending_slots_info mt-1 mt-lg-2 small text-muted">
+                    <span class="fw-semibold" t-esc="product._vending_slots.map(s => s.name).join(', ')"/>
+                </div>
+            </t>
+        </xpath>
+    </t>
+</templates>

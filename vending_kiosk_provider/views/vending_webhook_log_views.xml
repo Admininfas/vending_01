@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- List View -->
+    <record id="view_vending_webhook_log_list" model="ir.ui.view">
+        <field name="name">vending.webhook.log.list</field>
+        <field name="model">vending.webhook.log</field>
+        <field name="arch" type="xml">
+            <list string="Webhook Logs" create="false" edit="false"
+                  decoration-success="processing_result == 'processed'"
+                  decoration-warning="processing_result in ('duplicate', 'late_arrival', 'order_not_found')"
+                  decoration-danger="processing_result in ('internal_error', 'validation_error')">
+                <field name="create_date" string="Fecha/Hora"/>
+                <field name="endpoint" string="Endpoint"/>
+                <field name="reference" string="Referencia" optional="show"/>
+                <field name="processing_result" string="Resultado" optional="show"/>
+                <field name="actions_json" string="Acciones" optional="hide"/>
+                <field name="error_message" string="Error" optional="hide"/>
+                <field name="status_code" string="HTTP" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_vending_webhook_log_form" model="ir.ui.view">
+        <field name="name">vending.webhook.log.form</field>
+        <field name="model">vending.webhook.log</field>
+        <field name="arch" type="xml">
+            <form string="Webhook Log Detail" create="false" edit="false">
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="display_name" readonly="1"/></h1>
+                    </div>
+                    
+                    <group>
+                        <group name="basic_info" string="Request">
+                            <field name="create_date" string="Fecha/Hora"/>
+                            <field name="endpoint"/>
+                            <field name="reference"/>
+                            <field name="http_method"/>
+                            <field name="status_code"/>
+                        </group>
+                        <group name="audit_info" string="Auditoría">
+                            <field name="processing_result"/>
+                            <field name="actions_json" widget="text"/>
+                        </group>
+                    </group>
+
+                    <group invisible="not error_message">
+                        <group string="Error">
+                            <field name="error_message" widget="text"/>
+                        </group>
+                    </group>
+                    
+                    <notebook>
+                        <page string="Payload" name="payload">
+                            <field name="formatted_payload" widget="text" readonly="1"/>
+                        </page>
+                        <page string="Headers" name="headers" invisible="not headers_json">
+                            <field name="formatted_headers" widget="text" readonly="1"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+
+    <!-- Action -->
+    <record id="action_vending_webhook_log" model="ir.actions.act_window">
+        <field name="name">Webhook Logs</field>
+        <field name="res_model">vending.webhook.log</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_vending_webhook_log_list"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No hay logs de webhooks aún
+            </p>
+            <p>
+                Los logs se generan automáticamente cuando se reciben requests 
+                en los endpoints de webhooks de vending machines.
+            </p>
+            <p>
+                Endpoints disponibles:
+            </p>
+            <ul>
+                <li><strong>POST /v1/vending/webhook/status</strong>: Estado de transacciones</li>
+                <li><strong>POST /v1/vending/webhook/load</strong>: Información de stock en slots</li>
+            </ul>
+        </field>
+    </record>
+
+    <!-- Menu -->
+    <menuitem
+        id="menu_vending_webhook_logs"
+        name="Webhooks" 
+        parent="vending_kiosk_core.menu_vending_root"
+        action="action_vending_webhook_log"
+        sequence="30"
+        groups="vending_kiosk_core.group_vending_admin"/>
+
+</odoo>

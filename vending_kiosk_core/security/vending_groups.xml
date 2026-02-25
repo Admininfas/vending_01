@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Grupo de solo lectura - puede ver pero no modificar -->
+        <record id="group_vending_viewer" model="res.groups">
+            <field name="name">Vending Manager - Viewer</field>
+            <field name="comment">Puede ver configuración de máquinas y slots pero no modificar ni ver logs de webhooks</field>
+            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+        
+        <!-- Grupo con permisos completos -->
+        <record id="group_vending_admin" model="res.groups">
+            <field name="name">Vending Manager - Admin</field>
+            <field name="comment">Puede crear, modificar máquinas, slots y ver logs de webhooks</field>
+            <field name="implied_ids" eval="[(4, ref('vending_kiosk_core.group_vending_viewer'))]"/>
+        </record>
+        
+        <!-- Grupo super admin - configuración técnica avanzada -->
+        <record id="group_vending_superadmin" model="res.groups">
+            <field name="name">Vending Manager - SuperAdmin</field>
+            <field name="comment">Acceso completo incluyendo configuración técnica avanzada (timeouts, ubicaciones, journals)</field>
+            <field name="implied_ids" eval="[(4, ref('vending_kiosk_core.group_vending_admin'))]"/>
+        </record>
+    </data>
+</odoo>

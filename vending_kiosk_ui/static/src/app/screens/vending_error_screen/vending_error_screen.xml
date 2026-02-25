@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="vending_kiosk_ui.VendingErrorScreen">
+        <div class="o_self_vending_error d-flex align-items-center justify-content-center h-100 w-100">
+            <div class="card shadow-sm o_self_vending_card">
+                <div class="card-body text-center p-4">
+                    <!-- Icono de error -->
+                    <div class="mb-4">
+                        <div class="o_error_icon_container">
+                            <i class="fa fa-times-circle text-danger o_error_icon"></i>
+                        </div>
+                    </div>
+
+                    <!-- Título del error -->
+                    <h2 class="h3 mb-2 text-danger" t-esc="errorTitle"/>
+                    
+                    <!-- Descripción detallada del error -->
+                    <p class="text-muted mb-4" t-esc="error"/>
+
+                    <!-- Información del producto si está disponible -->
+                    <t t-if="product and productTemplateId">
+                        <div class="mb-4 p-3 border rounded-3 bg-light">
+                            <div class="row align-items-center">
+                                <div class="col-4">
+                                    <img t-attf-src="/web/image/product.template/#{productTemplateId}/image_128"
+                                         class="img-fluid rounded o_self_vending_image"
+                                         t-att-alt="product.display_name"/>
+                                </div>
+                                <div class="col-8 text-start">
+                                    <h6 class="mb-1" t-esc="product.display_name"/>
+                                    <p class="text-muted small mb-0">Producto no procesado</p>
+                                    <p class="text-success fw-bold mb-0" t-esc="formattedPrice"/>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+
+                    <!-- Mensaje genérico de ayuda -->
+                    <div class="mb-4 p-3 border rounded-3 o_vending_help_box">
+                        <div class="d-flex align-items-center justify-content-center mb-2">
+                            <i class="fa fa-info-circle me-2 o_help_icon"/>
+                            <span class="fw-semibold o_help_title">¿Qué hacer?</span>
+                        </div>
+                        <p class="small mb-0 o_help_text" t-esc="genericMessage"/>
+                    </div>
+
+                    <!-- Countdown y botón -->
+                    <div class="d-flex flex-column align-items-center">
+                        <p class="text-muted small mb-3">
+                            Regresando al menú en <span class="fw-bold text-primary" t-esc="state.countdown"/> segundos
+                        </p>
+                        <button type="button" 
+                                class="btn btn-primary btn-lg px-4" 
+                                t-on-click="regresar">
+                            <i class="fa fa-arrow-left me-2"/>
+                            Volver al menú
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>

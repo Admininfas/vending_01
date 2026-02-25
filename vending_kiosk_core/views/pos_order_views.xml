@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- Extensión de pos.order para mostrar datos de vending -->
+    <record id="view_pos_order_form_vending" model="ir.ui.view">
+        <field name="name">pos.order.form.vending</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="arch" type="xml">
+            <!-- Botón de Operación Stock en el oe_button_box del header -->
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button name="action_open_stock_picking" type="object" class="oe_stat_button" icon="fa-cubes" invisible="vending_delivery_id == False">
+                    <field name="vending_delivery_id" widget="statinfo" string="Entrega"/>
+                </button>
+            </xpath>
+            <!-- Página de detalles de Vending -->
+            <xpath expr="//sheet/notebook" position="inside">
+                <page string="Expendedora" name="vending_info">
+                    <group>
+                        <group>
+                            <field name="vending_status" readonly="1"/>
+                            <field name="vending_reference" readonly="1"/>
+                            <field name="vending_webhook_received_at" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="vending_machine_id" readonly="1"/>
+                            <field name="vending_slot_id" readonly="1"/>
+                        </group>
+                    </group>
+                    <separator string="Errores"/>
+                    <group>
+                        <group>
+                            <field name="vending_error_description" widget="text" nolabel="1" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="vending_internal_error" widget="text" nolabel="1" readonly="1"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Vista List vending con campos adicionales -->
+    <record id="view_pos_order_list_vending" model="ir.ui.view">
+        <field name="name">pos.order.list.vending</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_order_tree"/>
+        <field name="arch" type="xml">
+            <!-- Agregar máquina y slot después de config_id -->
+            <xpath expr="//field[@name='config_id']" position="after">
+                <field name="vending_machine_id"/>
+                <field name="vending_slot_id"/>
+            </xpath>
+            <!-- Agregar vending_status después de state (invoice_status) -->
+            <xpath expr="//field[@name='state']" position="after">
+                <field name="vending_status" widget="badge" 
+                decoration-muted="vending_status == 'draft'" 
+                decoration-info="vending_status in ('payment_success', 'qr_ready')"
+                decoration-danger="vending_status in ('qr_expired', 'payment_error', 'vending_delivery_error', 'user_cancelled')" 
+                decoration-success="vending_status in ('vending_delivery_success')"/>
+            </xpath>
+            <!-- Heredar "estado de la factura" para ponerle un invisible cuando el estado de la pos.order sea cancel -->
+            <xpath expr="//field[@name='invoice_status']" position="attributes">
+                <attribute name="invisible">state == 'cancel'</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Vista Search con filtros para vending -->
+    <record id="view_pos_order_search_vending" model="ir.ui.view">
+        <field name="name">pos.order.search.vending</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_order_filter"/>
+        <field name="arch" type="xml">
+            <!-- Agregar filtros de vending -->
+            <xpath expr="//filter[@name='cancelled']" position="after">
+                <separator/>
+                <!-- Filtros por estado de vending -->
+                <filter name="vending_qr_ready" string="QR Listo" domain="[('vending_status', '=', 'qr_ready')]"/>
+                <filter name="vending_qr_expired" string="QR Expirado" domain="[('vending_status', '=', 'qr_expired')]"/>
+                <filter name="vending_payment_success" string="Pago Exitoso" domain="[('vending_status', '=', 'payment_success')]"/>
+                <filter name="vending_payment_error" string="Error de Pago" domain="[('vending_status', '=', 'payment_error')]"/>
+                <filter name="vending_delivery_success" string="Entrega Confirmada" domain="[('vending_status', '=', 'vending_delivery_success')]"/>
+                <filter name="vending_delivery_error" string="Error de Entrega" domain="[('vending_status', '=', 'vending_delivery_error')]"/>
+                <separator/>
+                <!-- Filtros por máquina -->
+                <filter name="vending_has_machine" string="Con Máquina Vending" domain="[('vending_machine_id', '!=', False)]"/>
+                <separator/>
+            </xpath>
+            <!-- Agrupadores -->
+            <xpath expr="//filter[@name='status']" position="after">
+                <filter name="group_vending_machine" string="Por Máquina Vending" context="{'group_by': 'vending_machine_id'}"/>
+                <filter name="group_vending_status" string="Por Estado de Vending" context="{'group_by': 'vending_status'}"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
