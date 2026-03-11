@@ -1,147 +1,132 @@
 /** @odoo-module **/
 
 import { useService, useBus } from "@web/core/utils/hooks";
-import { onMounted, onWillUnmount } from "@odoo/owl";
+import { onMounted, onWillUnmount, useState } from "@odoo/owl";
+import { rpc } from "@web/core/network/rpc";
+
+/** Polling interval in ms – balance between freshness and server load */
+const POLL_INTERVAL_MS = 15000;
 
 /**
- * Hook personalizado para suscribirse a actualizaciones de productos vending vía bus.
- * 
- * Cuando cambia el stock de productos en la máquina (crear/modificar/eliminar stock.quant),
- * el backend envía una notificación al canal `vending_products_{config_id}`.
- * 
- * Usa `useBus` de `@web/core/utils/hooks` para gestionar automáticamente
- * el ciclo de vida del listener (addEventListener en mount, removeEventListener en unmount).
- * 
- * @param {Object} selfOrder - Servicio selfOrder con la configuración
- * @param {Function} onProductsUpdated - Callback a ejecutar cuando se actualicen los productos
- * @returns {Object} - Estado y métodos para manejar actualizaciones
+ * Hook personalizado para suscribirse a actualizaciones de productos vending.
+ *
+ * Estrategia dual:
+ *  1. **bus.bus** (instantáneo) – escucha canal `vending_products_{config_id}`.
+ *  2. **Polling ligero** (fallback) – cada 15 s llama `/v1/vending/products/poll`
+ *     con un hash; solo recarga datos si el hash cambió.
+ *
+ * Devuelve un estado reactivo OWL con los productos disponibles.
+ * Nunca muta selfOrder.config (es un proxy reactive read-only).
+ *
+ * @param {Object}   selfOrder          Servicio selfOrder con la configuración
+ * @param {Function} onProductsUpdated  Callback cuando cambian productos
+ * @returns {{ vendingProducts: Object, isActive: boolean, reloadProducts: Function }}
  */
 export function useVendingProductBus(selfOrder, onProductsUpdated) {
     const busService = useService("bus_service");
-    const orm = useService("orm");
-    
+
+    // Estado reactivo local – fuente de verdad para productos disponibles.
+    // Inicializado con los valores que el backend inyectó en config.
+    const vendingProducts = useState({
+        availableIds: [...(selfOrder?.config?._vending_available_products || [])],
+        productSlots: Object.assign({}, selfOrder?.config?._vending_product_slots || {}),
+    });
+
     let busChannel = null;
     let isActive = false;
+    let pollTimer = null;
+    let currentHash = '';
 
-    /**
-     * Handler de notificaciones del bus.
-     * useBus vincula automáticamente el listener al ciclo de vida del componente.
-     * Recibe notificaciones en el formato: { detail: [notifications] }
-     */
+    // ── Helpers ──
+    function updateProducts(newIds, newSlots) {
+        vendingProducts.availableIds.splice(0, vendingProducts.availableIds.length, ...newIds);
+        if (newSlots) {
+            for (const key of Object.keys(vendingProducts.productSlots)) {
+                delete vendingProducts.productSlots[key];
+            }
+            Object.assign(vendingProducts.productSlots, newSlots);
+        }
+        if (typeof onProductsUpdated === 'function') {
+            onProductsUpdated(newIds);
+        }
+    }
+
+    // ── Bus handler ──
     function onBusNotification({ detail: notifications }) {
-        console.log("[Vending Bus] Notificación recibida:", notifications);
         if (!notifications || !Array.isArray(notifications)) {
             return;
         }
-
-        // Filtrar notificaciones de nuestro canal
-        const relevantNotifications = notifications.filter(
-            notif => notif.payload?.channel === busChannel
+        const relevant = notifications.filter(
+            n => n.payload?.channel === busChannel
         );
-
-        if (relevantNotifications.length === 0) {
+        if (!relevant.length) {
             return;
         }
 
-        // Procesar cada notificación relevante
-        for (const notif of relevantNotifications) {
-            const message = notif.payload;
-            
-            if (message.type !== 'vending_products_update') {
+        for (const notif of relevant) {
+            const msg = notif.payload;
+            if (msg.type !== 'vending_products_update') {
                 continue;
             }
-
-            console.log(
-                `[Vending Bus] Actualización recibida: ${message.machine_name || 'Máquina'}`
-            );
-            
-            applyProductDelta(message);
+            // console.log(
+            //     `[Vending Bus] Actualización recibida: ${msg.machine_name || 'Máquina'} ` +
+            //     `(${(msg.all_available_ids || []).length} productos)`
+            // );
+            updateProducts(msg.all_available_ids || [], null);
         }
     }
 
-    /**
-     * Aplica actualización incremental de productos (DELTA UPDATE).
-     * El backend envía la lista completa en all_available_ids.
-     * El frontend calcula qué cambió comparando con su estado local.
-     */
-    function applyProductDelta(message) {
-        if (!selfOrder?.config) {
-            console.warn("[Vending Bus] No se puede aplicar delta: config no disponible");
-            return;
-        }
-
-        try {
-            const previousProducts = selfOrder.config._vending_available_products || [];
-            const newProducts = message.all_available_ids || [];
-            
-            const previousSet = new Set(previousProducts);
-            const added = newProducts.filter(id => !previousSet.has(id));
-            const removed = previousProducts.filter(id => !new Set(newProducts).has(id));
-            
-            if (added.length > 0 || removed.length > 0) {
-                console.log(
-                    `[Vending Bus] Delta: +${added.length} -${removed.length} | ` +
-                    `Total: ${newProducts.length} productos`
-                );
-            }
-            
-            selfOrder.config._vending_available_products = newProducts;
-
-            if (onProductsUpdated && typeof onProductsUpdated === 'function') {
-                onProductsUpdated(newProducts);
-            }
-            
-        } catch (error) {
-            console.error("[Vending Bus] Error aplicando delta:", error);
-            reloadProducts();
-        }
-    }
-
-    /**
-     * Recarga los productos disponibles desde el backend (fallback).
-     */
-    async function reloadProducts() {
+    // ── Polling ──
+    async function pollNow() {
         if (!selfOrder?.config?.id) {
-            console.warn("[Vending Bus] No se puede recargar: config no disponible");
             return;
         }
-
         try {
-            console.log("[Vending Bus] Recargando productos disponibles...");
-            
-            const updatedProductIds = await orm.call(
-                'pos.config',
-                'get_available_vending_product_ids',
-                [selfOrder.config.id]
-            );
+            const resp = await rpc("/v1/vending/products/poll", {
+                pos_config_id: selfOrder.config.id,
+                current_hash: currentHash,
+            });
 
-            if (!updatedProductIds || !Array.isArray(updatedProductIds)) {
-                console.error("[Vending Bus] Respuesta inválida del servidor");
+            if (resp.error) {
+                // console.warn("[Vending Poll] Error from server:", resp.error);
                 return;
             }
-            
-            selfOrder.config._vending_available_products = updatedProductIds;
-            
-            console.log(
-                `[Vending Bus] Productos actualizados: ${updatedProductIds.length} disponibles`
-            );
 
-            if (onProductsUpdated && typeof onProductsUpdated === 'function') {
-                onProductsUpdated(updatedProductIds);
+            currentHash = resp.hash || '';
+
+            if (!resp.changed) {
+                return;
             }
-            
-        } catch (error) {
-            console.error("[Vending Bus] Error recargando productos:", error);
+
+            // console.log(
+            //     `[Vending Poll] Cambio detectado – ${(resp.product_ids || []).length} productos`
+            // );
+
+            updateProducts(resp.product_ids || [], resp.product_slots || null);
+        } catch (err) {
+            // console.warn("[Vending Poll] Error de red:", err);
         }
     }
 
-    // ── useBus: gestiona addEventListener/removeEventListener automáticamente ──
+    function startPolling() {
+        stopPolling();
+        pollNow();
+        pollTimer = setInterval(pollNow, POLL_INTERVAL_MS);
+    }
+
+    function stopPolling() {
+        if (pollTimer) {
+            clearInterval(pollTimer);
+            pollTimer = null;
+        }
+    }
+
+    // ── Lifecycle ──
     useBus(busService, "notification", onBusNotification);
 
-    // ── Gestión de canal: addChannel en mount, deleteChannel en unmount ──
     onMounted(() => {
         if (!selfOrder?.config?.id) {
-            console.warn("[Vending Bus] No se pudo suscribir: config no disponible");
+            // console.warn("[Vending Bus] No se pudo suscribir: config no disponible");
             return;
         }
         if (selfOrder.config.self_ordering_mode !== 'vending') {
@@ -151,20 +136,25 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
         busChannel = `vending_products_${selfOrder.config.id}`;
         busService.addChannel(busChannel);
         isActive = true;
-        console.log(`[Vending Bus] Suscrito al canal: ${busChannel}`);
+        // console.log(`[Vending Bus] Suscrito al canal: ${busChannel}`);
+
+        startPolling();
+        // console.log(`[Vending Poll] Polling iniciado (cada ${POLL_INTERVAL_MS / 1000}s)`);
     });
 
     onWillUnmount(() => {
         if (busChannel) {
             busService.deleteChannel(busChannel);
-            console.log(`[Vending Bus] Desuscrito del canal: ${busChannel}`);
+            // console.log(`[Vending Bus] Desuscrito del canal: ${busChannel}`);
         }
         busChannel = null;
         isActive = false;
+        stopPolling();
     });
 
     return {
+        vendingProducts,
         isActive,
-        reloadProducts,
+        reloadProducts: pollNow,
     };
 }

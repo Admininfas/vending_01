@@ -376,7 +376,7 @@ class VendingWebhookController(http.Controller):
                 'status': status,
                 'description': description,
             }
-            self.env['bus.bus']._sendone(channel, 'notification', message)
+            self.env['bus.bus'].sudo()._sendone(channel, 'notification', message)
             _logger.info(f"[WEBHOOK] Bus notification enviada: channel={channel}, status={status}")
         except Exception:
             _logger.warning(f"[WEBHOOK] Bus no disponible, polling fallback activo")

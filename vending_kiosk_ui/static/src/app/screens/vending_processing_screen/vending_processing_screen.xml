@@ -47,7 +47,7 @@
                         <div class="mb-4">
                             <i class="fa fa-exclamation-circle text-danger o_vending_status_icon"/>
                         </div>
-                        <h3 class="h4 mb-2 text-danger">Error en el pago</h3>
+                        <h3 class="h4 mb-2 text-danger">Ocurrió un Error</h3>
                         <p class="text-muted mb-4">
                             <t t-if="state.error" t-esc="state.error"/>
                             <t t-else="">El pago no pudo ser procesado. Por favor, intente nuevamente.</t>
@@ -112,30 +112,32 @@
                         <!-- Producto seleccionado -->
                         <t t-if="product">
                             <div class="border rounded-3 p-3 bg-light">
-                                <div class="mb-3 text-center">
-                                    <img 
-                                        class="rounded-4 object-fit-cover o_vending_product_image" 
-                                        t-attf-src="/web/image/product.template/#{product.product_tmpl_id?.id or product.id}/image_512?unique=#{product.write_date}"
-                                        loading="lazy"
-                                        t-att-alt="product.display_name"
-                                    />
-                                </div>
-                                <div class="fw-semibold mb-1" t-esc="product.display_name"/>
-                                <div class="text-primary fw-bold fs-5 mb-2" t-esc="formattedPrice"/>
-
-                                <!-- Descripción pública del producto -->
-                                <t t-if="product.public_description">
-                                    <div class="mt-1 mb-2 text-muted small" t-out="product.public_description"/>
-                                </t>
-                                
-                                <!-- Información del slot seleccionado -->
-                                <t t-if="state.selectedSlot">
-                                    <div class="mt-2 pt-2 border-top">
-                                        <div class="d-flex align-items-center justify-content-center text-muted small">
-                                            <span class="fw-semibold" t-esc="state.selectedSlot.name"/>
-                                        </div>
+                                <div class="row align-items-center">
+                                    <div class="col-5">
+                                        <img 
+                                            class="img-fluid rounded-4 object-fit-cover o_vending_product_image" 
+                                            t-attf-src="/web/image/product.template/#{product.product_tmpl_id?.id or product.id}/image_512?unique=#{product.write_date}"
+                                            loading="lazy"
+                                            t-att-alt="product.display_name"
+                                        />
                                     </div>
-                                </t>
+                                    <div class="col-7 text-start">
+                                        <h5 class="fw-bold mb-1 o_vending_product_name" t-esc="product.display_name"/>
+                                        <div class="text-primary fw-bold o_vending_product_price mb-2" t-esc="formattedPrice"/>
+
+                                        <!-- Descripción pública del producto -->
+                                        <t t-if="product.public_description">
+                                            <div class="mb-2 text-muted small" t-out="product.public_description"/>
+                                        </t>
+
+                                        <!-- Información del slot seleccionado -->
+                                        <t t-if="state.selectedSlot">
+                                            <div class="mt-2 pt-2 border-top">
+                                                <span class="fw-semibold text-muted small" t-esc="state.selectedSlot.name"/>
+                                            </div>
+                                        </t>
+                                    </div>
+                                </div>
                             </div>
                         </t>
 

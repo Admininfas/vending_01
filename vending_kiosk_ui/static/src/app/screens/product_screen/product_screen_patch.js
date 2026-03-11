@@ -3,7 +3,6 @@
 import { patch } from "@web/core/utils/patch";
 import { ProductListPage } from "@pos_self_order/app/pages/product_list_page/product_list_page";
 import { useVendingProductBus } from "../../hooks/use_vending_product_bus";
-import { useState } from "@odoo/owl";
 
 /**
  * Patch para ProductListPage que agrega soporte para modo vending.
@@ -18,11 +17,7 @@ patch(ProductListPage.prototype, {
     setup() {
         super.setup();
         
-        // Estado local para forzar re-render cuando cambian productos
-        this.vendingState = useState({
-            lastUpdate: Date.now(),
-        });
-        
+        this.vendingBus = null;
         this._initVendingMode();
         this._initVendingProductBus();
     },
@@ -48,13 +43,8 @@ patch(ProductListPage.prototype, {
             return;
         }
 
-        // Usar el hook para suscribirse al bus
-        useVendingProductBus(this.selfOrder, (updatedProducts) => {
-            // Callback cuando se actualicen los productos
-            console.log(`[Vending] Productos actualizados, forzando re-render...`);
-            
-            // Actualizar timestamp para forzar re-render
-            this.vendingState.lastUpdate = Date.now();
+        this.vendingBus = useVendingProductBus(this.selfOrder, (updatedProducts) => {
+            // console.log(`[Vending] Productos actualizados: ${updatedProducts.length} disponibles`);
         });
     },
 
@@ -70,7 +60,7 @@ patch(ProductListPage.prototype, {
      * Solo muestra productos que tienen stock en los slots de la máquina.
      */
     _filterVendingProducts(products) {
-        const availableProductIds = this.selfOrder.config._vending_available_products || [];
+        const availableProductIds = this.vendingBus?.vendingProducts?.availableIds || [];
         
         if (!availableProductIds.length) {
             return [];
@@ -92,7 +82,7 @@ patch(ProductListPage.prototype, {
         const filteredProducts = this._filterVendingProducts(products);
         
         // Agregar información de slots a cada producto
-        const productSlots = this.selfOrder.config._vending_product_slots || {};
+        const productSlots = this.vendingBus?.vendingProducts?.productSlots || {};
         for (const product of filteredProducts) {
             product._vending_slots = productSlots[product.id] || [];
         }

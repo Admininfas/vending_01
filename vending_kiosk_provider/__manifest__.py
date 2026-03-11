@@ -25,6 +25,7 @@
     ],
     'data': [
         'security/ir.model.access.csv',
+        'data/ir_cron_data.xml',
         'views/vending_webhook_log_views.xml',
         'views/pos_order_views.xml',
         'views/pos_config_views.xml',

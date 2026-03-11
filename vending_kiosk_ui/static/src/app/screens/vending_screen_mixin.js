@@ -37,14 +37,14 @@ export const ERROR_MESSAGES = {
  * Títulos de error según tipo.
  */
 export const ERROR_TITLES = {
-    DEFAULT: "Error",
-    NO_STOCK: "Sin stock disponible",
-    PRODUCT_UNAVAILABLE: "Producto no disponible",
-    CONFIGURATION: "Error de configuración",
-    PAYMENT: "Error de pago",
-    SYSTEM: "Error del sistema",
+    DEFAULT: "Ocurrió un Error",
+    NO_STOCK: "Ocurrió un Error",
+    PRODUCT_UNAVAILABLE: "Ocurrió un Error",
+    CONFIGURATION: "Ocurrió un Error",
+    PAYMENT: "Ocurrió un Error",
+    SYSTEM: "Ocurrió un Error",
     QR_EXPIRED: "QR Expirado",
-    CONNECTION: "Error de conexión",
+    CONNECTION: "Ocurrió un Error",
 };
 
 /**
@@ -54,26 +54,7 @@ export const ERROR_TITLES = {
  * @returns {string} Título apropiado para mostrar
  */
 export function inferErrorTitle(errorMessage) {
-    if (!errorMessage) {
-        return ERROR_TITLES.DEFAULT;
-    }
-    
-    const errorLower = errorMessage.toLowerCase();
-    
-    if (errorLower.includes('stock') || errorLower.includes('disponible')) {
-        return ERROR_TITLES.NO_STOCK;
-    }
-    if (errorLower.includes('producto') && errorLower.includes('no está disponible')) {
-        return ERROR_TITLES.PRODUCT_UNAVAILABLE;
-    }
-    if (errorLower.includes('máquina') || errorLower.includes('configurad')) {
-        return ERROR_TITLES.CONFIGURATION;
-    }
-    if (errorLower.includes('pago') || errorLower.includes('qr')) {
-        return ERROR_TITLES.PAYMENT;
-    }
-    
-    return ERROR_TITLES.SYSTEM;
+    return ERROR_TITLES.DEFAULT;
 }
 
 /**

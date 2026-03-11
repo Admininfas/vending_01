@@ -29,7 +29,7 @@ export class VendingErrorScreen extends Component {
         
         // Props con valores por defecto
         this.product = this.props.product;
-        this.errorTitle = this.props.errorTitle || "Error";
+        this.errorTitle = this.props.errorTitle || "Ocurrió un Error";
         this.error = this.props.error || ERROR_MESSAGES.UNKNOWN_ERROR;
         this.genericMessage = ERROR_MESSAGES.GENERIC_HELP;
         
