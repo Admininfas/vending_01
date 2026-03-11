@@ -129,7 +129,7 @@ export class VendingProcessingScreen extends Component {
             this._startCountdownTimer();
             
         } catch (error) {
-            console.error("[Vending] Error al cargar QR:", error);
+            // console.error("[Vending] Error al cargar QR:", error);
             this._showErrorScreen(ERROR_MESSAGES.CONNECTION_ERROR, ERROR_TITLES.CONNECTION);
         }
     }
@@ -145,7 +145,7 @@ export class VendingProcessingScreen extends Component {
                 description: productTemplate.display_name,
             });
         } catch (rpcError) {
-            console.error("[Vending] Error RPC:", rpcError);
+            // console.error("[Vending] Error RPC:", rpcError);
             this._showErrorScreen(ERROR_MESSAGES.CONNECTION_ERROR, ERROR_TITLES.CONNECTION);
             return null;
         }
@@ -198,21 +198,21 @@ export class VendingProcessingScreen extends Component {
         }
         
         // TODO: Eliminar este bloque de console.log antes de ir a producción
-        if (this.state.reference) {
-            console.log(`%c=== TESTING REFERENCE: ${this.state.reference} ===`, 'background: #222; color: #bada55; font-weight: bold');
-            console.log(`SUCCESS: ./test_webhook.sh ${this.state.reference} success`);
-            console.log(`%c--- PAYMENT ERRORS ---`);
-            console.log(`./test_webhook.sh ${this.state.reference} payment-rejected`);
-            console.log(`./test_webhook.sh ${this.state.reference} payment-timeout`);
-            console.log(`./test_webhook.sh ${this.state.reference} payment-insufficient`);
-            console.log(`%c--- DISPENSING ERRORS ---`);
-            console.log(`./test_webhook.sh ${this.state.reference} dispensing-stuck`);
-            console.log(`./test_webhook.sh ${this.state.reference} dispensing-no-stock`);
-            console.log(`./test_webhook.sh ${this.state.reference} dispensing-mechanical`);
-            console.log(`%c--- SYSTEM ERRORS ---`);
-            console.log(`./test_webhook.sh ${this.state.reference} system-offline`);
-            console.log(`./test_webhook.sh ${this.state.reference} system-error`);
-        }
+        // if (this.state.reference) {
+        //     console.log(`%c=== TESTING REFERENCE: ${this.state.reference} ===`, 'background: #222; color: #bada55; font-weight: bold');
+        //     console.log(`SUCCESS: ./test_webhook.sh ${this.state.reference} success`);
+        //     console.log(`%c--- PAYMENT ERRORS ---`);
+        //     console.log(`./test_webhook.sh ${this.state.reference} payment-rejected`);
+        //     console.log(`./test_webhook.sh ${this.state.reference} payment-timeout`);
+        //     console.log(`./test_webhook.sh ${this.state.reference} payment-insufficient`);
+        //     console.log(`%c--- DISPENSING ERRORS ---`);
+        //     console.log(`./test_webhook.sh ${this.state.reference} dispensing-stuck`);
+        //     console.log(`./test_webhook.sh ${this.state.reference} dispensing-no-stock`);
+        //     console.log(`./test_webhook.sh ${this.state.reference} dispensing-mechanical`);
+        //     console.log(`%c--- SYSTEM ERRORS ---`);
+        //     console.log(`./test_webhook.sh ${this.state.reference} system-offline`);
+        //     console.log(`./test_webhook.sh ${this.state.reference} system-error`);
+        // }
         
         // Suscribirse al bus para notificaciones instantáneas
         if (this.state.reference) {
@@ -253,9 +253,9 @@ export class VendingProcessingScreen extends Component {
         // Polling preventivo 2 segundos antes de expirar
         // Útil para capturar pagos de último momento
         if (this.state.qrRemaining === 2) {
-            console.log("[Vending] Polling preventivo antes de expiración");
+            // console.log("[Vending] Polling preventivo antes de expiración");
             this._checkPaymentStatus().catch((error) => {
-                console.warn("[Vending] Error en polling preventivo:", error);
+                // console.warn("[Vending] Error en polling preventivo:", error);
             });
         }
         
@@ -277,14 +277,14 @@ export class VendingProcessingScreen extends Component {
      */
     _subscribeToBus() {
         if (!this.state.reference || !this.busService) {
-            console.warn("[Vending Bus] No se pudo suscribir: referencia o servicio bus no disponible");
+            // console.warn("[Vending Bus] No se pudo suscribir: referencia o servicio bus no disponible");
             return;
         }
 
         this._busChannel = `vending_order_${this.state.reference}`;
         this.busService.addChannel(this._busChannel);
         this.state.busActive = true;
-        console.log(`[Vending Bus] Suscrito al canal: ${this._busChannel}`);
+        // console.log(`[Vending Bus] Suscrito al canal: ${this._busChannel}`);
     }
 
     /**
@@ -315,7 +315,7 @@ export class VendingProcessingScreen extends Component {
                 return;
             }
 
-            console.log(`🔔 [Vending Bus] Notificación recibida: ${message.status} - ${message.description}`);
+            // console.log(`🔔 [Vending Bus] Notificación recibida: ${message.status} - ${message.description}`);
             
             // Procesar actualización instantánea
             this._handleBusUpdate(message);
@@ -333,7 +333,7 @@ export class VendingProcessingScreen extends Component {
         const status = message.status;
         const description = message.description || '';
 
-        console.log(`[Vending Bus] Procesando actualización instantánea: ${status}`);
+        // console.log(`[Vending Bus] Procesando actualización instantánea: ${status}`);
 
         // Detener polling ya que recibimos actualización vía bus
         this._stopPolling();
@@ -354,7 +354,7 @@ export class VendingProcessingScreen extends Component {
     _unsubscribeFromBus() {
         if (this._busChannel && this.busService) {
             this.busService.deleteChannel(this._busChannel);
-            console.log(`[Vending Bus] Desuscrito del canal: ${this._busChannel}`);
+            // console.log(`[Vending Bus] Desuscrito del canal: ${this._busChannel}`);
         }
         this._busChannel = null;
         this.state.busActive = false;
@@ -380,7 +380,7 @@ export class VendingProcessingScreen extends Component {
             ? 5000  // 5s con bus (fallback)
             : VENDING_DEFAULTS.POLLING_INTERVAL_MS;  // 3s sin bus
 
-        console.log(`[Vending Polling] Iniciado con intervalo: ${pollingInterval}ms (bus ${this.state.busActive ? 'activo' : 'inactivo'})`);
+        // console.log(`[Vending Polling] Iniciado con intervalo: ${pollingInterval}ms (bus ${this.state.busActive ? 'activo' : 'inactivo'})`);
 
         this._statusPollTimer = setInterval(async () => {
             await this._checkPaymentStatus();
@@ -409,7 +409,7 @@ export class VendingProcessingScreen extends Component {
             
         } catch (error) {
             // No detener polling en error de red, reintentar
-            console.warn("[Vending] Error consultando estado:", error);
+            // console.warn("[Vending] Error consultando estado:", error);
         }
     }
 
@@ -516,7 +516,7 @@ export class VendingProcessingScreen extends Component {
      * Confirma la cancelación y limpia todo.
      */
     async confirmCancel() {
-        console.log("[Vending] Usuario confirmó cancelación");
+        // console.log("[Vending] Usuario confirmó cancelación");
         
         // Ocultar modal
         this.state.showCancelConfirmation = false;
@@ -547,7 +547,7 @@ export class VendingProcessingScreen extends Component {
                     );
                 }
             } catch (error) {
-                console.warn("[Vending] Error cancelando orden:", error);
+                // console.warn("[Vending] Error cancelando orden:", error);
             }
         }
 
@@ -563,7 +563,7 @@ export class VendingProcessingScreen extends Component {
      * Cancela la cancelación (cierra el modal sin hacer nada).
      */
     dismissCancelConfirmation() {
-        console.log("[Vending] Usuario decidió continuar esperando el pago");
+        // console.log("[Vending] Usuario decidió continuar esperando el pago");
         this.state.showCancelConfirmation = false;
     }
 

@@ -47,12 +47,22 @@
         }
     }
 
-    // Product thumbnail inside the info card
+    // Product image inside the info card (horizontal layout)
     .o_vending_product_image {
-        width:  unquote("clamp(72px, 16vmin, 160px)");
-        height: unquote("clamp(72px, 16vmin, 160px)");
+        width: 100%;
+        max-height: unquote("clamp(140px, 30vmin, 340px)");
         object-fit: cover;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    // Product name
+    .o_vending_product_name {
+        font-size: unquote("clamp(1rem, 3vmin, 1.5rem)");
+    }
+
+    // Product price
+    .o_vending_product_price {
+        font-size: unquote("clamp(1.1rem, 3.5vmin, 1.75rem)");
     }
 
     // Fluid typography

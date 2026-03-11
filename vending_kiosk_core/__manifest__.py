@@ -34,6 +34,7 @@ Extensiones:
         'stock',
         'account',
         'mail',
+        'bus',
     ],
     'data': [
         'security/vending_groups.xml',

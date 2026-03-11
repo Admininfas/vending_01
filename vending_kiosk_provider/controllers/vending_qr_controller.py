@@ -9,6 +9,7 @@ Endpoints:
 """
 
 import uuid
+import hashlib
 import logging
 from odoo import http  # type: ignore
 from odoo.http import request  # type: ignore
@@ -135,12 +136,12 @@ class VendingQrController(http.Controller):
         if error_type:
             response['error_type'] = error_type
             error_type_labels = {
-                'payment': 'Error en el Pago',
-                'delivery': 'Error de Entrega',
-                'timeout': 'Tiempo Agotado',
-                'cancelled': 'Operación Cancelada',
+                'payment': 'Ocurrió un Error',
+                'delivery': 'Ocurrió un Error',
+                'timeout': 'QR Expirado',
+                'cancelled': 'Ocurrió un Error',
             }
-            response['error_type_label'] = error_type_labels.get(error_type, 'Error')
+            response['error_type_label'] = error_type_labels.get(error_type, 'Ocurrió un Error')
             response['error_description'] = order.vending_error_description or 'Ocurrió un error desconocido'
             _logger.info(f"[POLLING] Response con error: {response}")
 
@@ -349,4 +350,59 @@ class VendingQrController(http.Controller):
             'qr': qr_data,
             'slot_code': slot.code,
             'slot_name': slot.name,
+        }
+
+    @http.route('/v1/vending/products/poll', type='jsonrpc', auth='public', csrf=False)
+    def poll_products(self, **kwargs):
+        """
+        Lightweight polling endpoint for product availability updates.
+
+        The client sends a hash of its current product state.  If the server
+        computes a *different* hash it replies with the full updated data so
+        the kiosk can refresh its catalogue without a full page reload.
+
+        Request body:
+        {
+            "pos_config_id": number,
+            "current_hash": "string"   // hash the client computed last time
+        }
+
+        Response:
+        {
+            "changed": true | false,
+            "hash": "string",                    // always present
+            "product_ids": [int, ...] | null,    // only when changed
+            "product_slots": {id: [...]} | null  // only when changed
+        }
+        """
+        config_id = kwargs.get('pos_config_id')
+        client_hash = kwargs.get('current_hash', '')
+
+        if not config_id:
+            return {'error': 'pos_config_id is required'}
+
+        env = request.env
+        config = env['pos.config'].sudo().browse(int(config_id))
+
+        if not config.exists() or not config.vending_machine_id:
+            return {'changed': False, 'hash': '', 'product_ids': None, 'product_slots': None}
+
+        product_ids = config.get_available_vending_product_ids()
+        product_slots = config.get_all_product_slots()
+
+        # Build a deterministic hash from product ids + slot data
+        raw = str(sorted(product_ids)) + str(sorted(
+            (k, tuple(sorted((s['code'], s['stock']) for s in v)))
+            for k, v in product_slots.items()
+        ))
+        server_hash = hashlib.md5(raw.encode()).hexdigest()
+
+        if server_hash == client_hash:
+            return {'changed': False, 'hash': server_hash, 'product_ids': None, 'product_slots': None}
+
+        return {
+            'changed': True,
+            'hash': server_hash,
+            'product_ids': product_ids,
+            'product_slots': product_slots,
         }

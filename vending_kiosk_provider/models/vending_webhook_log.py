@@ -8,6 +8,7 @@ y el resultado de su procesamiento para auditoría.
 """
 
 import json
+from datetime import timedelta
 from odoo import api, fields, models  # type: ignore
 
 import logging
@@ -185,3 +186,12 @@ class VendingWebhookLog(models.Model):
         if warning_code not in current_warnings:
             current_warnings.append(warning_code)
             self.warnings = json.dumps(current_warnings, ensure_ascii=False)
+
+    @api.model
+    def _cron_cleanup_old_logs(self, days=7):
+        """Elimina logs de webhook con antigüedad mayor a `days` días."""
+        cutoff = fields.Datetime.now() - timedelta(days=days)
+        old_logs = self.search([('create_date', '<', cutoff)])
+        count = len(old_logs)
+        old_logs.unlink()
+        _logger.info('Webhook log cleanup: %d registros eliminados (anteriores a %s).', count, cutoff)

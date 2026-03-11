@@ -26,11 +26,9 @@ export class VendingSuccessScreen extends Component {
         this.product = this.props.product;
         this.reference = this.props.reference;
         
-        // Estado reactivo
-        const countdownSeconds = this.selfOrder?.config?.vending_countdown_seconds 
-            || VENDING_DEFAULTS.COUNTDOWN_SECONDS;
+        // Estado reactivo - 5 segundos fijos para pantalla de éxito
         this.state = useState({
-            countdown: countdownSeconds,
+            countdown: 5,
         });
         
         // Timer

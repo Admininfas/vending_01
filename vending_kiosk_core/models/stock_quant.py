@@ -209,7 +209,7 @@ class StockQuant(models.Model):
                     'all_available_ids': current_products,
                 }
                 
-                self.env['bus.bus']._sendone(channel, 'notification', message)
+                self.env['bus.bus'].sudo()._sendone(channel, 'notification', message)
                 
                 _logger.info(
                     f"[Vending Bus] Notificación enviada al canal {channel} "
