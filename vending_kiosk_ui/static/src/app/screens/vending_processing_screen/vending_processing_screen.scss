@@ -47,22 +47,22 @@
         }
     }
 
-    // Product image inside the info card (horizontal layout)
+    // Product image inside the info card – larger than the QR code
     .o_vending_product_image {
-        width: 100%;
-        max-height: unquote("clamp(140px, 30vmin, 340px)");
+        width:  unquote("clamp(160px, 40vmin, 390px)");
+        height: unquote("clamp(160px, 40vmin, 390px)");
         object-fit: cover;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
     // Product name
     .o_vending_product_name {
-        font-size: unquote("clamp(1rem, 3vmin, 1.5rem)");
+        font-size: unquote("clamp(1.05rem, 3vmin, 1.5rem)");
     }
 
     // Product price
     .o_vending_product_price {
-        font-size: unquote("clamp(1.1rem, 3.5vmin, 1.75rem)");
+        font-size: unquote("clamp(1.15rem, 3.5vmin, 1.75rem)");
     }
 
     // Fluid typography
