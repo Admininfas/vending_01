@@ -31,6 +31,7 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
         availableIds: [...(selfOrder?.config?._vending_available_products || [])],
         productSlots: Object.assign({}, selfOrder?.config?._vending_product_slots || {}),
         productMinSlotCode: Object.assign({}, selfOrder?.config?._vending_product_min_slot_code || {}),
+        productMeta: {},
     });
 
     let busChannel = null;
@@ -39,7 +40,163 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
     let currentHash = '';
 
     // ── Helpers ──
-    function updateProducts(newIds, newSlots, newProductMinSlotCode) {
+    function _toTemplateId(product) {
+        if (!product) {
+            return null;
+        }
+        const maybeId = product.product_tmpl_id?.id ?? product.id;
+        const numericId = Number(maybeId);
+        return Number.isFinite(numericId) ? numericId : null;
+    }
+
+    function _iterProductCandidates(visitor) {
+        const visited = new Set();
+        const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+
+        const visit = (product) => {
+            if (!product || typeof product !== "object") {
+                return;
+            }
+            const looksLikeProduct = (
+                hasOwn(product, "display_name")
+                || hasOwn(product, "list_price")
+                || hasOwn(product, "public_description")
+                || hasOwn(product, "product_tmpl_id")
+            );
+            if (!looksLikeProduct) {
+                return;
+            }
+            if (visited.has(product)) {
+                return;
+            }
+            visited.add(product);
+            visitor(product);
+        };
+
+        const modelContainers = [];
+        const models = selfOrder?.models;
+
+        if (Array.isArray(models)) {
+            modelContainers.push(models);
+        } else if (models && typeof models === "object") {
+            const productModelKeys = new Set([
+                "product.template",
+                "product_template",
+                "product.product",
+                "product_product",
+            ]);
+            for (const [key, value] of Object.entries(models)) {
+                if (!productModelKeys.has(key)) {
+                    continue;
+                }
+                if (Array.isArray(value)) {
+                    modelContainers.push(value);
+                } else if (value && typeof value === "object") {
+                    modelContainers.push(Object.values(value));
+                }
+            }
+        }
+
+        const extraCollections = [
+            selfOrder?.products,
+            selfOrder?.productTemplates,
+            selfOrder?.productById && Object.values(selfOrder.productById),
+        ];
+
+        for (const collection of [...modelContainers, ...extraCollections]) {
+            if (!collection) {
+                continue;
+            }
+            if (Array.isArray(collection)) {
+                for (const item of collection) {
+                    visit(item);
+                }
+            }
+        }
+
+        visit(selfOrder?.selectedVendingProduct);
+    }
+
+    function _applyMetaToProduct(product, meta) {
+        const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+        const normalizeOdooDateTime = (value) => {
+            if (!value) {
+                return false;
+            }
+            if (typeof value !== "string") {
+                return false;
+            }
+            const trimmed = value.trim();
+            if (!trimmed) {
+                return false;
+            }
+            // Odoo web espera "YYYY-MM-DD HH:MM:SS" para datetime fields.
+            const normalized = trimmed.replace("T", " ").split(".")[0];
+            return normalized || false;
+        };
+        if (!product || !meta) {
+            return;
+        }
+
+        if (hasOwn(meta, "display_name")) {
+            product.display_name = meta.display_name || "";
+            if (hasOwn(product, "name")) {
+                product.name = meta.display_name || product.name || "";
+            }
+        }
+        if (hasOwn(meta, "public_description")) {
+            product.public_description = meta.public_description || false;
+        }
+        if (hasOwn(meta, "write_date")) {
+            product.write_date = normalizeOdooDateTime(meta.write_date);
+        }
+        if (hasOwn(meta, "price")) {
+            const parsedPrice = Number(meta.price);
+            if (Number.isFinite(parsedPrice)) {
+                product.list_price = parsedPrice;
+                if (hasOwn(product, "lst_price")) {
+                    product.lst_price = parsedPrice;
+                }
+                product._vending_price_override = parsedPrice;
+            }
+        }
+    }
+
+    function applyProductMeta(productMeta) {
+        if (!productMeta || typeof productMeta !== "object") {
+            return;
+        }
+
+        for (const key of Object.keys(vendingProducts.productMeta)) {
+            delete vendingProducts.productMeta[key];
+        }
+        Object.assign(vendingProducts.productMeta, productMeta);
+
+        _iterProductCandidates((product) => {
+            const templateId = _toTemplateId(product);
+            if (!templateId) {
+                return;
+            }
+
+            const meta = productMeta[templateId] || productMeta[String(templateId)];
+            if (!meta) {
+                return;
+            }
+
+            _applyMetaToProduct(product, meta);
+        });
+
+        const selected = selfOrder?.selectedVendingProduct;
+        const selectedTemplateId = _toTemplateId(selected);
+        if (selectedTemplateId) {
+            const selectedMeta = productMeta[selectedTemplateId] || productMeta[String(selectedTemplateId)];
+            if (selectedMeta) {
+                _applyMetaToProduct(selected, selectedMeta);
+            }
+        }
+    }
+
+    function updateProducts(newIds, newSlots, newProductMinSlotCode, newProductMeta) {
         vendingProducts.availableIds.splice(0, vendingProducts.availableIds.length, ...newIds);
         if (newSlots) {
             for (const key of Object.keys(vendingProducts.productSlots)) {
@@ -52,6 +209,9 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
                 delete vendingProducts.productMinSlotCode[key];
             }
             Object.assign(vendingProducts.productMinSlotCode, newProductMinSlotCode);
+        }
+        if (newProductMeta) {
+            applyProductMeta(newProductMeta);
         }
         if (typeof onProductsUpdated === 'function') {
             onProductsUpdated(newIds);
@@ -80,6 +240,9 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
             //     `(${(msg.all_available_ids || []).length} productos)`
             // );
             updateProducts(msg.all_available_ids || [], null, null);
+
+            // El bus avisa rápido; hacemos poll inmediato para traer metadata fresca.
+            pollNow();
         }
     }
 
@@ -113,6 +276,7 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
                 resp.product_ids || [],
                 resp.product_slots || null,
                 resp.product_min_slot_code || null,
+                resp.product_meta || null,
             );
         } catch (err) {
             // console.warn("[Vending Poll] Error de red:", err);

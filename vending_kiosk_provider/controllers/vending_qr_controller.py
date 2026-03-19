@@ -11,8 +11,9 @@ Endpoints:
 import uuid
 import hashlib
 import logging
-from odoo import http  # type: ignore
+from odoo import http, fields  # type: ignore
 from odoo.http import request  # type: ignore
+from odoo.tools import html2plaintext  # type: ignore
 
 _logger = logging.getLogger(__name__)
 
@@ -22,6 +23,64 @@ LOG_SEP = "=" * 60
 
 class VendingQrController(http.Controller):
     """Controller for creating draft POS orders and requesting QR from provider."""
+
+    @staticmethod
+    def _to_public_description_text(description_html):
+        """Convierte HTML de Odoo a texto plano para frontend kiosk."""
+        if not description_html:
+            return False
+
+        text = html2plaintext(description_html or '').strip()
+        return text or False
+
+    @staticmethod
+    def _get_pricelist_price(pricelist, product_tmpl):
+        """Obtiene el precio de visualización según la pricelist del POS."""
+        if not product_tmpl:
+            return 0.0
+
+        product_variant = product_tmpl.product_variant_id
+        price = product_tmpl.list_price or 0.0
+        if not pricelist or not product_variant:
+            return float(price)
+
+        get_price = getattr(pricelist, 'get_product_price', None)
+        if callable(get_price):
+            return float(get_price(product_variant, 1.0, False) or 0.0)
+
+        get_price = getattr(pricelist, '_get_product_price', None)
+        if callable(get_price):
+            return float(get_price(product_variant, 1.0, False) or 0.0)
+
+        return float(price)
+
+    def _build_product_meta_for_poll(self, config, product_ids, product_slots, product_min_slot_code):
+        """Construye metadata mínima de productos para refresco en vivo del kiosk."""
+        product_meta = {}
+        if not product_ids:
+            return product_meta
+
+        products = request.env['product.template'].sudo().browse(product_ids).exists()
+        products_by_id = {product.id: product for product in products}
+
+        for product_id in product_ids:
+            product = products_by_id.get(product_id)
+            if not product:
+                continue
+
+            write_date = product.write_date
+            write_date_text = fields.Datetime.to_string(write_date) if write_date else False
+            product_meta[product_id] = {
+                'id': product.id,
+                'display_name': product.display_name or product.name or '',
+                'public_description': self._to_public_description_text(product.public_description),
+                'write_date': write_date_text,
+                'price': self._get_pricelist_price(config.pricelist_id, product),
+                'min_slot_code': product_min_slot_code.get(product_id),
+                'slots': product_slots.get(product_id, []),
+            }
+
+        return product_meta
 
     def _find_anonymous_consumer_partner(self, machine):
         """
@@ -398,11 +457,30 @@ class VendingQrController(http.Controller):
         product_ids = catalog_data['product_ids']
         product_slots = catalog_data['product_slots']
         product_min_slot_code = catalog_data['product_min_slot_code']
+        product_meta = self._build_product_meta_for_poll(
+            config,
+            product_ids,
+            product_slots,
+            product_min_slot_code,
+        )
 
-        # Build a deterministic hash from product ids + slot data
+        # Build a deterministic hash from product ids + slots + catalog metadata.
         raw = str(sorted(product_ids)) + str(sorted(
-            (k, tuple(sorted((s['code'], s['stock']) for s in v)))
-            for k, v in product_slots.items()
+            (
+                int(key),
+                tuple(sorted((slot['code'], slot['name'], slot['stock']) for slot in value))
+            )
+            for key, value in product_slots.items()
+        )) + str(sorted(
+            (
+                int(key),
+                value.get('display_name') or '',
+                value.get('public_description') or '',
+                round(float(value.get('price') or 0.0), 6),
+                value.get('write_date') or '',
+                value.get('min_slot_code') or 0,
+            )
+            for key, value in product_meta.items()
         ))
         server_hash = hashlib.md5(raw.encode()).hexdigest()
 
@@ -413,6 +491,7 @@ class VendingQrController(http.Controller):
                 'product_ids': None,
                 'product_slots': None,
                 'product_min_slot_code': None,
+                'product_meta': None,
             }
 
         return {
@@ -421,4 +500,5 @@ class VendingQrController(http.Controller):
             'product_ids': product_ids,
             'product_slots': product_slots,
             'product_min_slot_code': product_min_slot_code,
+            'product_meta': product_meta,
         }

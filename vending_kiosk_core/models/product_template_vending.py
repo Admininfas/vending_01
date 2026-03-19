@@ -5,6 +5,7 @@ Extensión de product.template para modo vending.
 """
 
 import logging
+from odoo.tools import html2plaintext  # type: ignore
 from odoo import models, fields, api, _  # type: ignore
 
 _logger = logging.getLogger(__name__)
@@ -12,6 +13,16 @@ _logger = logging.getLogger(__name__)
 
 class ProductTemplate(models.Model):
     _inherit = 'product.template'
+
+    _VENDING_CATALOG_TRIGGER_FIELDS = {
+        'name',
+        'public_description',
+        'list_price',
+        'image_1920',
+        'active',
+        'available_in_pos',
+        'sale_ok',
+    }
     
     # Relación inversa para acceder a slots
     vending_slot_ids = fields.One2many(
@@ -26,6 +37,42 @@ class ProductTemplate(models.Model):
         sanitize_attributes=False,
         help='Descripción visible para el cliente en el kiosk vending'
     )
+
+    @staticmethod
+    def _to_public_description_text(description_html):
+        """Convierte HTML de Odoo a texto plano apto para el kiosk."""
+        if not description_html:
+            return False
+
+        text = html2plaintext(description_html or '').strip()
+        return text or False
+
+    def _notify_vending_catalog_changes(self, reason='product_template_update'):
+        """Notifica al kiosco cuando cambia metadata relevante de productos."""
+        machines = self.mapped('vending_slot_ids.machine_id')
+        if not machines:
+            return
+
+        _logger.info(
+            "[Vending Bus] Notificando cambio de catálogo (%s) para %s máquina(s) por %s producto(s)",
+            reason,
+            len(machines),
+            len(self),
+        )
+        self.env['stock.quant']._notify_vending_changes_for_machines(machines)
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        if any(self._VENDING_CATALOG_TRIGGER_FIELDS.intersection(vals.keys()) for vals in vals_list):
+            records._notify_vending_catalog_changes(reason='product_template_create')
+        return records
+
+    def write(self, vals):
+        result = super().write(vals)
+        if self._VENDING_CATALOG_TRIGGER_FIELDS.intersection(vals.keys()):
+            self._notify_vending_catalog_changes(reason='product_template_write')
+        return result
 
     @api.model
     def _load_pos_self_data_search_read(self, response, config):
@@ -77,7 +124,10 @@ class ProductTemplate(models.Model):
         result = self._load_pos_self_data_read(records, config)
 
         # Agregar public_description a cada producto para el kiosk
-        descriptions = {r.id: r.public_description or False for r in records}
+        descriptions = {
+            record.id: self._to_public_description_text(record.public_description)
+            for record in records
+        }
         for record_data in result:
             record_data['public_description'] = descriptions.get(record_data['id'], False)
 

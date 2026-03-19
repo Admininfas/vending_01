@@ -86,6 +86,14 @@ export const VendingScreenMixin = {
         if (!product || !selfOrder) {
             return "";
         }
+
+        const overridePrice = Number(product._vending_price_override);
+        if (Number.isFinite(overridePrice)) {
+            return selfOrder.formatMonetary
+                ? selfOrder.formatMonetary(overridePrice)
+                : String(overridePrice);
+        }
+
         const productTemplate = product.product_tmpl_id || product;
         const price = selfOrder.getProductDisplayPrice(productTemplate, product);
         return selfOrder.formatMonetary

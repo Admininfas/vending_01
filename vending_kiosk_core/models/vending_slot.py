@@ -72,6 +72,23 @@ class VendingSlot(models.Model):
         help='Stock disponible en la ubicación específica del slot'
     )
 
+    _VENDING_SLOT_CATALOG_FIELDS = {
+        'machine_id',
+        'name',
+        'code',
+        'product_tmpl_id',
+        'location_id',
+        'is_active',
+    }
+
+    def _notify_vending_slot_catalog_changes(self, machines=None, reason='slot_update'):
+        """Dispara actualización de catálogo para las máquinas impactadas por slots."""
+        target_machines = machines or self.mapped('machine_id')
+        if not target_machines:
+            return
+
+        self.env['stock.quant']._notify_vending_changes_for_machines(target_machines)
+
     @api.depends('location_id', 'product_tmpl_id')
     def _compute_current_stock(self):
         """Computa el stock real disponible en la ubicación del slot."""
@@ -86,6 +103,33 @@ class VendingSlot(models.Model):
                 ('product_id.product_tmpl_id', '=', slot.product_tmpl_id.id),
             ])
             slot.current_stock = sum(quants.mapped('available_quantity'))
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        records._notify_vending_slot_catalog_changes(reason='slot_create')
+        return records
+
+    def write(self, vals):
+        old_machines = self.mapped('machine_id')
+        result = super().write(vals)
+        if self._VENDING_SLOT_CATALOG_FIELDS.intersection(vals.keys()):
+            affected_machines = (old_machines | self.mapped('machine_id'))
+            self._notify_vending_slot_catalog_changes(
+                machines=affected_machines,
+                reason='slot_write',
+            )
+        return result
+
+    def unlink(self):
+        affected_machines = self.mapped('machine_id')
+        result = super().unlink()
+        if affected_machines:
+            self._notify_vending_slot_catalog_changes(
+                machines=affected_machines,
+                reason='slot_unlink',
+            )
+        return result
 
     @api.constrains('machine_id', 'code')
     def _check_unique_code_per_machine(self):
