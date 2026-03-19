@@ -44,13 +44,13 @@ class ProductTemplate(models.Model):
             # Sin máquina configurada: no mostrar productos
             _logger.warning("[Vending] No hay máquina expendedora configurada para POS %s", config.id)
             return []
-        
-        # Modo vending: solo productos con slots activos y stock
-        available_products = config.get_available_vending_products()
-        _logger.info("[Vending] Productos disponibles con stock: %s (IDs: %s)", 
-                     len(available_products), available_products.ids)
-        
-        if not available_products:
+
+        # Modo vending: solo productos con slots activos y stock.
+        available_product_ids = config.get_available_vending_product_ids()
+        _logger.info("[Vending] Productos disponibles con stock: %s (IDs: %s)",
+                     len(available_product_ids), available_product_ids)
+
+        if not available_product_ids:
             # Sin productos disponibles: devolver lista vacía
             _logger.warning("[Vending] No hay productos con stock disponible")
             return []
@@ -58,12 +58,21 @@ class ProductTemplate(models.Model):
         # Aplicar filtro vending directamente en la búsqueda
         domain = self._load_pos_self_data_domain(response, config)
         domain = domain + [
-            ('id', 'in', available_products.ids),
+            ('id', 'in', available_product_ids),
             ('company_id', 'in', [config.company_id.id, False]),
         ]
         _logger.debug("[Vending] Domain final (company_id=%s): %s", config.company_id.id, domain)
-        
+
         records = self.search(domain)
+        ordering_index = {product_id: index for index, product_id in enumerate(available_product_ids)}
+        records = records.sorted(
+            key=lambda product: (
+                ordering_index.get(product.id, 10**9),
+                (product.display_name or product.name or '').lower(),
+                product.id,
+            )
+        )
+
         _logger.info("[Vending] Productos cargados para self-order: %s", len(records))
         result = self._load_pos_self_data_read(records, config)
 

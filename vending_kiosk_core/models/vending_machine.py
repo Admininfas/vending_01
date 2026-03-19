@@ -7,7 +7,11 @@ Mantiene la identidad de hardware y la configuración de stock
 asociada al almacén de la máquina.
 """
 
+import base64
+import hashlib
+import hmac
 import logging
+from cryptography.fernet import Fernet, InvalidToken
 from odoo import models, fields, api, _  # type: ignore
 from odoo.exceptions import ValidationError  # type: ignore
 
@@ -95,6 +99,112 @@ class VendingMachine(models.Model):
         readonly=True,
         store=True
     )
+    api_key_input = fields.Char(
+        string='API Key',
+        copy=False,
+        help='Campo de carga manual. Al guardar se cifra y no queda visible en texto plano.',
+    )
+    api_key_encrypted = fields.Text(
+        string='API Key (cifrada)',
+        copy=False,
+        readonly=True,
+        groups='vending_kiosk_core.group_vending_superadmin',
+        help='Valor cifrado persistido en base de datos.',
+    )
+    api_key_last4 = fields.Char(
+        string='API Key (ultimos 4)',
+        size=4,
+        readonly=True,
+        groups='vending_kiosk_core.group_vending_superadmin',
+    )
+    api_key_set_at = fields.Datetime(
+        string='API Key cargada en',
+        readonly=True,
+        groups='vending_kiosk_core.group_vending_superadmin',
+    )
+    api_key_set_by = fields.Many2one(
+        'res.users',
+        string='API Key cargada por',
+        readonly=True,
+        groups='vending_kiosk_core.group_vending_superadmin',
+    )
+    api_key_configured = fields.Boolean(
+        string='API Key configurada',
+        compute='_compute_api_key_configured',
+        store=True,
+    )
+
+    @api.depends('api_key_encrypted')
+    def _compute_api_key_configured(self):
+        for record in self:
+            record.api_key_configured = bool(record.api_key_encrypted)
+
+    def _get_api_key_master_secret(self):
+        """Obtiene la llave maestra desde parámetros del sistema."""
+        secret = self.env['ir.config_parameter'].sudo().get_param(
+            'vending.api_key_master_secret',
+            default=''
+        )
+        if not secret:
+            raise ValidationError(_(
+                'No existe la llave maestra de API keys. Configure '
+                'el parámetro del sistema "vending.api_key_master_secret".'
+            ))
+        return secret
+
+    def _get_fernet(self):
+        """Construye el cifrador Fernet a partir de la llave maestra."""
+        secret = self._get_api_key_master_secret()
+        key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode('utf-8')).digest())
+        return Fernet(key)
+
+    def _encrypt_api_key(self, plain_api_key):
+        """Cifra una API key en texto plano."""
+        if not plain_api_key:
+            return False
+        token = self._get_fernet().encrypt(plain_api_key.encode('utf-8'))
+        return token.decode('utf-8')
+
+    def _decrypt_api_key(self):
+        """Descifra la API key almacenada para esta máquina."""
+        self.ensure_one()
+        if not self.api_key_encrypted:
+            return ''
+        try:
+            token = self.api_key_encrypted.encode('utf-8')
+            plain = self._get_fernet().decrypt(token)
+            return plain.decode('utf-8')
+        except (InvalidToken, ValueError, TypeError) as error:
+            _logger.exception('No se pudo descifrar API key de máquina %s: %s', self.code, error)
+            raise ValidationError(_(
+                'No se pudo descifrar la API key de la máquina "%s". '
+                'Revise la llave maestra del sistema.', self.name
+            ))
+
+    def set_api_key(self, plain_api_key):
+        """Persiste la API key cifrada y metadatos de auditoría."""
+        for record in self:
+            encrypted = record._encrypt_api_key((plain_api_key or '').strip())
+            values = {
+                'api_key_encrypted': encrypted,
+                'api_key_last4': (plain_api_key or '')[-4:] if plain_api_key else False,
+                'api_key_set_at': fields.Datetime.now() if plain_api_key else False,
+                'api_key_set_by': self.env.user.id if plain_api_key else False,
+            }
+            super(VendingMachine, record).write(values)
+
+    def get_api_key(self):
+        """Devuelve la API key en texto plano para uso interno de requests."""
+        self.ensure_one()
+        return self._decrypt_api_key()
+
+    def is_api_key_valid(self, candidate_key):
+        """Compara la API key recibida usando comparación segura."""
+        self.ensure_one()
+        if not candidate_key or not self.api_key_encrypted:
+            return False
+        expected = self.get_api_key()
+        return hmac.compare_digest(expected, candidate_key)
 
     def _default_invoice_journal(self):
         """
@@ -351,7 +461,15 @@ class VendingMachine(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         """Sincronizar relación bidireccional POS-Vending al crear."""
+        pending_keys = []
+        for vals in vals_list:
+            pending_keys.append(vals.pop('api_key_input', False))
+
         records = super().create(vals_list)
+
+        for record, api_key_plain in zip(records, pending_keys):
+            if api_key_plain:
+                record.set_api_key(api_key_plain)
         
         for record in records:
             if record.pos_config_id and not self.env.context.get('skip_pos_sync'):
@@ -363,6 +481,8 @@ class VendingMachine(models.Model):
 
     def write(self, vals):
         """Sincronizar relación bidireccional POS-Vending al escribir."""
+        api_key_plain = vals.pop('api_key_input', False) if 'api_key_input' in vals else False
+
         # Solo sincronizar si no estamos en un contexto de sincronización
         if 'pos_config_id' in vals and not self.env.context.get('skip_pos_sync'):
             # Limpiar referencias anteriores ANTES del write
@@ -382,5 +502,8 @@ class VendingMachine(models.Model):
                     record.pos_config_id.with_context(skip_vending_sync=True).write({
                         'vending_machine_id': record.id
                     })
+
+        if api_key_plain:
+            self.set_api_key(api_key_plain)
         
         return result

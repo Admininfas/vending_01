@@ -36,6 +36,9 @@ Extensiones:
         'mail',
         'bus',
     ],
+    'external_dependencies': {
+        'python': ['cryptography'],
+    },
     'data': [
         'security/vending_groups.xml',
         'security/ir.model.access.csv',

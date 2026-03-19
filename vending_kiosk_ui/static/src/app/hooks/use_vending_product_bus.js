@@ -30,6 +30,7 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
     const vendingProducts = useState({
         availableIds: [...(selfOrder?.config?._vending_available_products || [])],
         productSlots: Object.assign({}, selfOrder?.config?._vending_product_slots || {}),
+        productMinSlotCode: Object.assign({}, selfOrder?.config?._vending_product_min_slot_code || {}),
     });
 
     let busChannel = null;
@@ -38,13 +39,19 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
     let currentHash = '';
 
     // ── Helpers ──
-    function updateProducts(newIds, newSlots) {
+    function updateProducts(newIds, newSlots, newProductMinSlotCode) {
         vendingProducts.availableIds.splice(0, vendingProducts.availableIds.length, ...newIds);
         if (newSlots) {
             for (const key of Object.keys(vendingProducts.productSlots)) {
                 delete vendingProducts.productSlots[key];
             }
             Object.assign(vendingProducts.productSlots, newSlots);
+        }
+        if (newProductMinSlotCode) {
+            for (const key of Object.keys(vendingProducts.productMinSlotCode)) {
+                delete vendingProducts.productMinSlotCode[key];
+            }
+            Object.assign(vendingProducts.productMinSlotCode, newProductMinSlotCode);
         }
         if (typeof onProductsUpdated === 'function') {
             onProductsUpdated(newIds);
@@ -72,7 +79,7 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
             //     `[Vending Bus] Actualización recibida: ${msg.machine_name || 'Máquina'} ` +
             //     `(${(msg.all_available_ids || []).length} productos)`
             // );
-            updateProducts(msg.all_available_ids || [], null);
+            updateProducts(msg.all_available_ids || [], null, null);
         }
     }
 
@@ -102,7 +109,11 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
             //     `[Vending Poll] Cambio detectado – ${(resp.product_ids || []).length} productos`
             // );
 
-            updateProducts(resp.product_ids || [], resp.product_slots || null);
+            updateProducts(
+                resp.product_ids || [],
+                resp.product_slots || null,
+                resp.product_min_slot_code || null,
+            );
         } catch (err) {
             // console.warn("[Vending Poll] Error de red:", err);
         }

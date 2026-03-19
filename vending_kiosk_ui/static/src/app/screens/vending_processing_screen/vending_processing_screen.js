@@ -13,6 +13,10 @@ import {
     VendingScreenMixin 
 } from "../vending_screen_mixin";
 
+const DELIVERY_SUCCESS_STATUSES = new Set(['success', 'SUCCESS', 'vending_delivery_success']);
+const PAYMENT_SUCCESS_STATUSES = new Set(['payment_success']);
+const ERROR_STATUSES = new Set(['error', 'ERROR', 'payment_error', 'vending_delivery_error']);
+
 /**
  * Pantalla de procesamiento de pago para vending.
  * Muestra el QR de pago y realiza polling del estado hasta que se complete.
@@ -198,21 +202,15 @@ export class VendingProcessingScreen extends Component {
         }
         
         // TODO: Eliminar este bloque de console.log antes de ir a producción
-        // if (this.state.reference) {
-        //     console.log(`%c=== TESTING REFERENCE: ${this.state.reference} ===`, 'background: #222; color: #bada55; font-weight: bold');
-        //     console.log(`SUCCESS: ./test_webhook.sh ${this.state.reference} success`);
-        //     console.log(`%c--- PAYMENT ERRORS ---`);
-        //     console.log(`./test_webhook.sh ${this.state.reference} payment-rejected`);
-        //     console.log(`./test_webhook.sh ${this.state.reference} payment-timeout`);
-        //     console.log(`./test_webhook.sh ${this.state.reference} payment-insufficient`);
-        //     console.log(`%c--- DISPENSING ERRORS ---`);
-        //     console.log(`./test_webhook.sh ${this.state.reference} dispensing-stuck`);
-        //     console.log(`./test_webhook.sh ${this.state.reference} dispensing-no-stock`);
-        //     console.log(`./test_webhook.sh ${this.state.reference} dispensing-mechanical`);
-        //     console.log(`%c--- SYSTEM ERRORS ---`);
-        //     console.log(`./test_webhook.sh ${this.state.reference} system-offline`);
-        //     console.log(`./test_webhook.sh ${this.state.reference} system-error`);
-        // }
+        if (this.state.reference) {
+            console.log(`%c=== TESTING REFERENCE: ${this.state.reference} ===`, 'background: #222; color: #bada55; font-weight: bold');
+            console.log(`PAYMENT APPROVED: ./test_webhook.sh ${this.state.reference} payment-approved --api-key <api-key>`);
+            console.log(`DELIVERY SUCCESS: ./test_webhook.sh ${this.state.reference} delivery-success --api-key <api-key>`);
+            console.log(`%c--- PAYMENT ERRORS ---`);
+            console.log(`./test_webhook.sh ${this.state.reference} payment-rejected --api-key <api-key>`);
+            console.log(`%c--- DELIVERY ERRORS ---`);
+            console.log(`./test_webhook.sh ${this.state.reference} delivery-error --api-key <api-key>`);
+        }
         
         // Suscribirse al bus para notificaciones instantáneas
         if (this.state.reference) {
@@ -334,17 +332,11 @@ export class VendingProcessingScreen extends Component {
         const description = message.description || '';
 
         // console.log(`[Vending Bus] Procesando actualización instantánea: ${status}`);
-
-        // Detener polling ya que recibimos actualización vía bus
-        this._stopPolling();
-
-        // Procesar según status
-        if (status === 'SUCCESS') {
-            this._navigateToSuccess();
-        } else if (status === 'ERROR') {
-            const errorTitle = inferErrorTitle(description);
-            this._showErrorScreen(description || ERROR_MESSAGES.UNKNOWN_ERROR, errorTitle);
-        }
+        this._applyStatusTransition(status, {
+            description,
+            errorTypeLabel: ERROR_TITLES.DEFAULT,
+            source: 'bus',
+        });
     }
 
     /**
@@ -417,27 +409,42 @@ export class VendingProcessingScreen extends Component {
      * Procesa la respuesta del endpoint de status.
      */
     _handleStatusResponse(response) {
-        const status = response.status;
+        const status = response.vending_status || response.status;
+        this._applyStatusTransition(status, {
+            description: response.error_description || '',
+            errorTypeLabel: response.error_type_label || ERROR_TITLES.DEFAULT,
+            source: 'polling',
+        });
+    }
 
-        switch (status) {
-            case 'success':
-                this._stopPolling();
-                this._navigateToSuccess();
-                break;
-                
-            case 'error':
-                this._stopPolling();
-                this._showErrorScreen(
-                    response.error_description || ERROR_MESSAGES.UNKNOWN_ERROR,
-                    response.error_type_label || ERROR_TITLES.DEFAULT
-                );
-                break;
-                
-            case 'expired':
-            case 'cancelled':
-                this._stopPolling();
-                // No navegar, ya se maneja localmente
-                break;
+    _applyStatusTransition(rawStatus, { description = '', errorTypeLabel = ERROR_TITLES.DEFAULT } = {}) {
+        const status = String(rawStatus || '').trim();
+        if (!status) {
+            return;
+        }
+
+        // Entrega tiene prioridad sobre pago para soportar eventos fuera de orden.
+        if (DELIVERY_SUCCESS_STATUSES.has(status)) {
+            this._stopPolling();
+            this._navigateToDeliverySuccess();
+            return;
+        }
+
+        if (PAYMENT_SUCCESS_STATUSES.has(status)) {
+            this._stopPolling();
+            this._navigateToPaymentSuccess();
+            return;
+        }
+
+        if (ERROR_STATUSES.has(status)) {
+            this._stopPolling();
+            const errorTitle = inferErrorTitle(description) || errorTypeLabel;
+            this._showErrorScreen(description || ERROR_MESSAGES.UNKNOWN_ERROR, errorTitle);
+            return;
+        }
+
+        if (status === 'expired' || status === 'cancelled') {
+            this._stopPolling();
         }
     }
 
@@ -455,9 +462,15 @@ export class VendingProcessingScreen extends Component {
     /**
      * Navega a la pantalla de éxito.
      */
-    _navigateToSuccess() {
+    _navigateToDeliverySuccess() {
         if (this.router) {
             this.router.navigate("vending-success");
+        }
+    }
+
+    _navigateToPaymentSuccess() {
+        if (this.router) {
+            this.router.navigate("vending-payment-success");
         }
     }
 

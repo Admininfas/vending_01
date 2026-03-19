@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+    <t t-name="vending_kiosk_ui.VendingPaymentSuccessScreen">
+        <div class="o_self_vending_payment_success d-flex align-items-center justify-content-center h-100 w-100">
+            <div class="card shadow-sm o_self_vending_card">
+                <div class="card-body text-center p-4">
+                    <div class="mb-4">
+                        <div class="o_success_icon_container">
+                            <i class="fa fa-check-circle text-success o_success_icon"/>
+                        </div>
+                    </div>
+
+                    <h2 class="h3 mb-2 text-success">Pago confirmado</h2>
+                    <p class="text-muted mb-4">Estamos preparando la entrega de tu producto</p>
+
+                    <div class="mb-4 p-3 border rounded-3 bg-info-subtle border-info">
+                        <div class="d-flex align-items-center justify-content-center mb-2">
+                            <i class="fa fa-cog text-info me-2"/>
+                            <span class="fw-semibold text-info-emphasis">Entrega en proceso</span>
+                        </div>
+                        <p class="text-muted small mb-0">Tiempo esperando entrega: <span class="fw-semibold" t-esc="waitTimeLabel"/></p>
+                    </div>
+
+                    <t t-if="product">
+                        <div class="border rounded-3 p-3 bg-light mb-4">
+                            <div class="mb-3 text-center">
+                                <img
+                                    class="rounded-4 object-fit-cover o_self_vending_image"
+                                    t-attf-src="/web/image/product.template/#{product.product_tmpl_id?.id or product.id}/image_512?unique=#{product.write_date}"
+                                    loading="lazy"
+                                    t-att-alt="product.display_name"
+                                />
+                            </div>
+                            <div class="fw-semibold mb-1">Producto comprado</div>
+                            <div class="mb-1" t-esc="product.display_name"/>
+                            <div class="text-success fw-bold" t-esc="formattedPrice"/>
+                        </div>
+                    </t>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>

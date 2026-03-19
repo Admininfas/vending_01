@@ -25,7 +25,8 @@ class VendingWebhookLog(models.Model):
 
     # ── Campos principales ──
     endpoint = fields.Selection([
-        ('status', 'Status Webhook'),
+        ('payment_status', 'Payment Status Webhook'),
+        ('delivery_status', 'Delivery Status Webhook'),
         ('load', 'Load Webhook'),
     ], string='Endpoint', required=True, index=True, help='Tipo de webhook recibido')
     
@@ -83,6 +84,7 @@ class VendingWebhookLog(models.Model):
         ('duplicate', 'Duplicado'),
         ('late_arrival', 'Extemporáneo'),
         ('order_not_found', 'Orden no encontrada'),
+        ('auth_error', 'Error de autenticación'),
         ('validation_error', 'Error de validación'),
         ('internal_error', 'Error interno'),
     ], string='Resultado', index=True,

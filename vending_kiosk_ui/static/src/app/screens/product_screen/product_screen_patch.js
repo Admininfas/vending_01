@@ -69,6 +69,37 @@ patch(ProductListPage.prototype, {
         return products.filter(product => availableProductIds.includes(product.id));
     },
 
+    _getProductMinSlotCodeMap() {
+        return (
+            this.vendingBus?.vendingProducts?.productMinSlotCode ||
+            this.selfOrder?.config?._vending_product_min_slot_code ||
+            {}
+        );
+    },
+
+    _sortVendingProducts(products) {
+        const minSlotCodeByProduct = this._getProductMinSlotCodeMap();
+        return [...products].sort((productA, productB) => {
+            const rawCodeA = Number(minSlotCodeByProduct[productA.id]);
+            const rawCodeB = Number(minSlotCodeByProduct[productB.id]);
+            const codeA = Number.isFinite(rawCodeA) ? rawCodeA : Number.MAX_SAFE_INTEGER;
+            const codeB = Number.isFinite(rawCodeB) ? rawCodeB : Number.MAX_SAFE_INTEGER;
+
+            if (codeA !== codeB) {
+                return codeA - codeB;
+            }
+
+            const nameA = String(productA.display_name || productA.name || '').toLocaleLowerCase();
+            const nameB = String(productB.display_name || productB.name || '').toLocaleLowerCase();
+            const byName = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+            if (byName !== 0) {
+                return byName;
+            }
+
+            return (productA.id || 0) - (productB.id || 0);
+        });
+    },
+
     getProducts(category) {
         if (!this._isVendingMode()) {
             return super.getProducts(category);
@@ -80,14 +111,15 @@ patch(ProductListPage.prototype, {
 
         const products = super.getProducts(category);
         const filteredProducts = this._filterVendingProducts(products);
+        const sortedProducts = this._sortVendingProducts(filteredProducts);
         
         // Agregar información de slots a cada producto
         const productSlots = this.vendingBus?.vendingProducts?.productSlots || {};
-        for (const product of filteredProducts) {
+        for (const product of sortedProducts) {
             product._vending_slots = productSlots[product.id] || [];
         }
         
-        return filteredProducts;
+        return sortedProducts;
     },
 
     selectProduct(product, target) {

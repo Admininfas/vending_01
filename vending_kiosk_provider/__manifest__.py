@@ -11,7 +11,8 @@
         
         Funcionalidades:
         - Creación de órdenes POS y solicitud de QR de pago
-        - Webhook POST /v1/vending/webhook/status (estado de transacciones)
+        - Webhook POST /v1/vending/webhook/payment_status (estado de pago)
+        - Webhook POST /v1/vending/webhook/delivery_status (estado de entrega)
         - Webhook POST /v1/vending/webhook/load (carga de stock en slots)
         - Polling de estado de órdenes desde el kiosk
         - Logging y auditoría de todos los webhooks recibidos
