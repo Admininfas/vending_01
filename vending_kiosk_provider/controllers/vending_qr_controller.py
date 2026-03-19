@@ -108,6 +108,7 @@ class VendingQrController(http.Controller):
         _logger.info(f"[POLLING] vending_status={status}, vending_error_description={order.vending_error_description}")
         
         status_map = {
+            'payment_success': 'payment_success',
             'vending_delivery_success': 'success',
             'payment_error': 'error',
             'vending_delivery_error': 'error',
@@ -385,10 +386,18 @@ class VendingQrController(http.Controller):
         config = env['pos.config'].sudo().browse(int(config_id))
 
         if not config.exists() or not config.vending_machine_id:
-            return {'changed': False, 'hash': '', 'product_ids': None, 'product_slots': None}
+            return {
+                'changed': False,
+                'hash': '',
+                'product_ids': None,
+                'product_slots': None,
+                'product_min_slot_code': None,
+            }
 
-        product_ids = config.get_available_vending_product_ids()
-        product_slots = config.get_all_product_slots()
+        catalog_data = config.get_vending_catalog_data()
+        product_ids = catalog_data['product_ids']
+        product_slots = catalog_data['product_slots']
+        product_min_slot_code = catalog_data['product_min_slot_code']
 
         # Build a deterministic hash from product ids + slot data
         raw = str(sorted(product_ids)) + str(sorted(
@@ -398,11 +407,18 @@ class VendingQrController(http.Controller):
         server_hash = hashlib.md5(raw.encode()).hexdigest()
 
         if server_hash == client_hash:
-            return {'changed': False, 'hash': server_hash, 'product_ids': None, 'product_slots': None}
+            return {
+                'changed': False,
+                'hash': server_hash,
+                'product_ids': None,
+                'product_slots': None,
+                'product_min_slot_code': None,
+            }
 
         return {
             'changed': True,
             'hash': server_hash,
             'product_ids': product_ids,
             'product_slots': product_slots,
+            'product_min_slot_code': product_min_slot_code,
         }

@@ -66,6 +66,35 @@ class VendingProviderClient(models.AbstractModel):
         )
         return not bool(provider_url)
 
+    def _get_machine_by_identifier(self, machine_identifier):
+        machine = self.env['vending.machine'].sudo().search([
+            ('code', '=', machine_identifier),
+        ], limit=1)
+        if not machine:
+            raise UserError(f'No existe máquina con identificador {machine_identifier}')
+        return machine
+
+    def _get_machine_by_reference(self, reference):
+        order = self.env['pos.order'].sudo().search([
+            ('vending_reference', '=', reference),
+        ], limit=1)
+        return order.vending_machine_id if order else False
+
+    def _build_headers(self, machine):
+        if not machine:
+            raise UserError('No se pudo determinar la máquina para enviar API key al proveedor')
+
+        api_key = machine.get_api_key()
+        if not api_key:
+            raise UserError(
+                f'La máquina {machine.name} no tiene API key configurada para proveedor'
+            )
+
+        return {
+            'Content-Type': 'application/json',
+            'x-api-key': api_key,
+        }
+
     def request_qr(self, machine_identifier, reference, amount_cents, slot_number, description=None, timeout=None):
         """
         Solicita la generación de un QR de pago al proveedor.
@@ -97,14 +126,23 @@ class VendingProviderClient(models.AbstractModel):
         _logger.info(f"{LOG_SEP}")
         _logger.info(f"[PROVIDER CLIENT] === SOLICITANDO QR AL PROVEEDOR ===")
         
-        # Si no hay URL externa configurada, usar dummy interno
-        if self._is_dummy_mode():
-            _logger.info(f"[PROVIDER CLIENT] Usando dummy provider interno")
-            return self._request_qr_dummy(machine_identifier, reference, amount_cents, slot_number, description, timeout)
-        
-        # Usar proveedor externo real
+        machine = self._get_machine_by_identifier(machine_identifier)
+        headers = self._build_headers(machine)
+
+        # Usar proveedor externo real o dummy HTTP
         base_url = self._get_base_url()
-        endpoint = f"{base_url}/payment/qr/{machine_identifier}"
+        if '/dummy' in base_url:
+            _logger.info('[PROVIDER CLIENT] Dummy detectado por base_url. Usando fallback interno sin HTTP externo.')
+            return self._request_qr_dummy(
+                machine_identifier,
+                reference,
+                amount_cents,
+                slot_number,
+                description,
+                timeout,
+            )
+
+        endpoint = f"{base_url}/payments/qr/{machine_identifier}"
         
         payload = {
             'reference': reference,
@@ -121,7 +159,7 @@ class VendingProviderClient(models.AbstractModel):
             response = requests.post(
                 endpoint,
                 json=payload,
-                headers={'Content-Type': 'application/json'},
+                headers=headers,
                 timeout=HTTP_REQUEST_TIMEOUT,
             )
             
@@ -135,8 +173,9 @@ class VendingProviderClient(models.AbstractModel):
             data = response.json()
             _logger.info(f"[PROVIDER CLIENT] ✓ Response body: {json.dumps(data)[:200]}...")
             
-            # Validar respuesta (Winfas devuelve 'content' y 'data_url')
-            if 'data_url' not in data or 'content' not in data:
+            # Acepta formato real (data_url) y dummy (url)
+            qr_url = data.get('data_url') or data.get('url')
+            if not qr_url or 'content' not in data:
                 _logger.error(f"[PROVIDER CLIENT] ✗ Respuesta inválida: {data}")
                 raise UserError("Respuesta inválida del proveedor")
             
@@ -145,7 +184,7 @@ class VendingProviderClient(models.AbstractModel):
             _logger.info(f"{LOG_SEP}")
             
             return {
-                'url': data['data_url'],
+                'url': qr_url,
                 'content': data['content'],
                 'timeout': timeout,
             }
@@ -181,11 +220,16 @@ class VendingProviderClient(models.AbstractModel):
         """
         base_url = self._get_base_url()
         endpoint = f"{base_url}/status/{reference}"
+        if '/dummy' in base_url:
+            return self._check_status_dummy(reference)
+
+        machine = self._get_machine_by_reference(reference)
+        headers = self._build_headers(machine)
         
         try:
             response = requests.post(
                 endpoint,
-                headers={'Content-Type': 'application/json'},
+                headers=headers,
                 timeout=HTTP_REQUEST_TIMEOUT,
             )
             
@@ -226,24 +270,29 @@ class VendingProviderClient(models.AbstractModel):
 
     def _request_qr_dummy(self, machine_identifier, reference, amount_cents, slot_number, description, timeout):
         """
-        Solicita QR usando el dummy provider interno (sin HTTP).
+        Fallback local para dummy cuando el endpoint HTTP externo no es accesible
+        desde el contenedor (ej: localhost:8087).
         """
-        # Generar UUID único para el QR
         qr_uuid = str(uuid.uuid4())
-        
-        # Generar URLs dummy
-        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
-        qr_url = f"{base_url}/dummy/qr/{qr_uuid}"
-        qr_content = f"DUMMY_QR:{reference}:{amount_cents}"
-        
-        _logger.info(f"[PROVIDER CLIENT] ✓ QR dummy generado: url={qr_url}")
+        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url').rstrip('/')
+        qr_url = f"{base_url}/dummy/payments/qr/image/{qr_uuid}"
+        qr_content = f"DUMMY_QR:{machine_identifier}:{reference}:{amount_cents}:{slot_number}"
+
+        _logger.info('[PROVIDER CLIENT] ✓ QR dummy fallback generado: %s', qr_url)
         _logger.info(f"[PROVIDER CLIENT] === FIN SOLICITUD QR ===")
         _logger.info(f"{LOG_SEP}")
-        
+
         return {
             'url': qr_url,
             'content': qr_content,
             'timeout': timeout,
+        }
+
+    def _check_status_dummy(self, reference):
+        """Fallback dummy para consultas de estado cuando no hay HTTP externo."""
+        return {
+            'reference': reference,
+            'status': 'PENDING',
         }
 
     def _parse_error_response(self, response):

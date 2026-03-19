@@ -8,6 +8,9 @@
             <t t-set-slot="vending-success" route="`/pos-self/${selfOrder.config.id}/vending-success`">
                 <VendingSuccessScreen product="selfOrder.selectedVendingProduct" reference="selfOrder.vendingReference"/>
             </t>
+            <t t-set-slot="vending-payment-success" route="`/pos-self/${selfOrder.config.id}/vending-payment-success`">
+                <VendingPaymentSuccessScreen product="selfOrder.selectedVendingProduct" reference="selfOrder.vendingReference"/>
+            </t>
             <t t-set-slot="vending-error" route="`/pos-self/${selfOrder.config.id}/vending-error`">
                 <VendingErrorScreen product="selfOrder.selectedVendingProduct" error="selfOrder.vendingErrorMessage" errorTitle="selfOrder.vendingErrorTitle"/>
             </t>

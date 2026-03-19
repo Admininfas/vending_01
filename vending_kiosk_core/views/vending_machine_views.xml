@@ -47,6 +47,14 @@
                                    options="{'no_create': True}"
                                    groups="vending_kiosk_core.group_vending_superadmin"/>
                         </group>
+                        <group string="Seguridad API" groups="vending_kiosk_core.group_vending_superadmin">
+                            <field name="api_key_input" password="True" placeholder="Pegar nueva API key"/>
+                            <field name="api_key_configured" readonly="1"/>
+                            <field name="api_key_last4" readonly="1"/>
+                            <field name="api_key_set_at" readonly="1"/>
+                            <field name="api_key_set_by" readonly="1"/>
+                            <field name="api_key_encrypted" invisible="1"/>
+                        </group>
                     </group>
                     
                     <notebook>

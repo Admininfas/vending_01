@@ -1,0 +1,26 @@
+$vending-payment-gradient-start: #f0fff4;
+$vending-payment-gradient-end:   #e6f7ff;
+
+.o_self_vending_payment_success {
+    background: linear-gradient(135deg, $vending-payment-gradient-start 0%, $vending-payment-gradient-end 100%);
+    min-height: 100vh;
+    min-height: 100dvh;
+
+    .o_self_vending_card {
+        width: unquote("min(90vw, 720px)");
+        border-radius: unquote("clamp(12px, 2vmin, 24px)");
+        border: none;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+
+        .card-body {
+            padding: unquote("clamp(1rem, 4vmin, 2.5rem)") !important;
+        }
+    }
+
+    .o_self_vending_image {
+        width: unquote("clamp(80px, 18vmin, 180px)");
+        height: unquote("clamp(80px, 18vmin, 180px)");
+        object-fit: cover;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+}

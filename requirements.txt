@@ -1,0 +1,5 @@
+qrcode
+pyzk
+watchdog
+gevent>=24.2.1
+cryptography>=42.0.0

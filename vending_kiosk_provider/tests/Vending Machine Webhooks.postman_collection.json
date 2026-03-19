@@ -1,931 +1,120 @@
 {
   "info": {
-    "_postman_id": "92b3dc7b-f289-4f88-a3e3-1a4932040073",
-    "name": "Vending Machine Webhooks",
-    "description": "Colección de pruebas para webhooks de Winfas → Odoo\n\nEndpoints:\n- POST /v1/vending/webhook/status: Estado de transacciones\n- POST /v1/vending/webhook/load: Carga de stock (objeto único O array de objetos)\n\nLoad Webhook - formatos aceptados:\n  Objeto único → responde text/plain con código HTTP según resultado\n  Array        → responde siempre HTTP 200 + JSON { results: [...] } con el status de cada item\n\nConfiguración:\n1. Ajustar la variable {{base_url}} al servidor Odoo (ej: http://localhost:8069)\n2. Crear una orden con QR primero para obtener una reference válida\n3. Ejecutar los tests en orden\n\nCódigos HTTP esperados:\n- 200: OK (procesado o duplicado, o respuesta batch)\n- 400: Error en el payload\n- 404: Recurso no encontrado\n- 500: Error interno (Winfas reintentará)",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "_exporter_id": "41239053"
+    "_postman_id": "e92d8b26-9183-4f6f-bf42-2b489c5ad4fe",
+    "name": "Vending Machine Webhooks (Split + API Key)",
+    "description": "Coleccion para probar webhooks de vending con endpoints separados y autenticacion x-api-key por maquina.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
     {
-      "name": "Status Webhook",
+      "name": "Payment Status",
       "item": [
         {
-          "name": "SUCCESS - Pago y entrega exitosos",
+          "name": "APPROVED",
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"reference\": \"{{test_reference}}\",\n  \"status\": \"SUCCESS\",\n  \"description\": \"Producto dispensado correctamente\"\n}"
+              "raw": "{\n  \"reference\": \"{{test_reference}}\",\n  \"status\": \"APPROVED\",\n  \"description\": \"PAYMENT_APPROVED\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/status",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "status"
-              ]
-            },
-            "description": "Simula un pago y entrega exitosos desde Winfas.\n\nEspera: HTTP 200\nResultado: Orden pasa a vending_delivery_success, se genera factura, se descuenta stock."
-          },
-          "response": []
+              "raw": "{{base_url}}/v1/vending/webhook/payment_status",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "payment_status"]
+            }
+          }
         },
         {
-          "name": "SUCCESS - Duplicado (idempotencia)",
+          "name": "REJECTED",
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"reference\": \"{{test_reference}}\",\n  \"status\": \"SUCCESS\",\n  \"description\": \"Reintento de Winfas\"\n}"
+              "raw": "{\n  \"reference\": \"{{test_reference}}\",\n  \"status\": \"REJECTED\",\n  \"description\": \"PAYMENT_REJECTED\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/status",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "status"
-              ]
-            },
-            "description": "Prueba idempotencia: enviar el mismo SUCCESS dos veces.\n\nPaso 1: Enviar SUCCESS primera vez → HTTP 200, procesado  \nPaso 2: Enviar SUCCESS segunda vez → HTTP 200, ignorado (duplicado)\n\nRevisá el log del webhook para ver \"Not updated: duplicate or outside grace period\"."
-          },
-          "response": []
+              "raw": "{{base_url}}/v1/vending/webhook/payment_status",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "payment_status"]
+            }
+          }
         },
         {
-          "name": "ERROR - Pago rechazado",
+          "name": "Unauthorized API key",
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-api-key", "value": "invalid-key" }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"reference\": \"{{test_reference}}\",\n  \"status\": \"ERROR\",\n  \"description\": \"PAYMENT_REJECTED\"\n}"
+              "raw": "{\n  \"reference\": \"{{test_reference}}\",\n  \"status\": \"APPROVED\",\n  \"description\": \"PAYMENT_APPROVED\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/status",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "status"
-              ]
-            },
-            "description": "Simula un pago rechazado.\n\nEspera: HTTP 200  \nResultado: Orden pasa a payment_error con descripción amigable en español."
-          },
-          "response": []
-        },
+              "raw": "{{base_url}}/v1/vending/webhook/payment_status",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "payment_status"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delivery Status",
+      "item": [
         {
-          "name": "ERROR - Pago timeout",
+          "name": "SUCCESS",
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"reference\": \"{{test_reference}}\",\n  \"status\": \"ERROR\",\n  \"description\": \"PAYMENT_TIMEOUT\"\n}"
+              "raw": "{\n  \"reference\": \"{{test_reference}}\",\n  \"status\": \"SUCCESS\",\n  \"description\": \"DELIVERY_SUCCESS\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/status",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "status"
-              ]
-            },
-            "description": "Simula un pago rechazado por timeout.\n\nEspera: HTTP 200  \nResultado: Orden pasa a payment_error con descripción amigable en español."
-          },
-          "response": []
+              "raw": "{{base_url}}/v1/vending/webhook/delivery_status",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "delivery_status"]
+            }
+          }
         },
         {
-          "name": "ERROR - Pago con fondos insuficientes",
+          "name": "ERROR",
           "request": {
             "method": "POST",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"reference\": \"{{test_reference}}\",\n  \"status\": \"ERROR\",\n  \"description\": \"PAYMENT_INSUFFICIENT_FUNDS\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/status",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "status"
-              ]
-            },
-            "description": "Simula un pago rechazado por fondos insuficientes.\n\nEspera: HTTP 200  \nResultado: Orden pasa a payment_error con descripción amigable en español."
-          },
-          "response": []
-        },
-        {
-          "name": "ERROR - Entrega de producto atascada",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"reference\": \"{{test_reference}}\",\n  \"status\": \"ERROR\",\n  \"description\": \"DISPENSING_STUCK\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/status",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "status"
-              ]
-            },
-            "description": "Simula un error de dispensación (producto atascado).\n\nEspera: HTTP 200\nResultado: Orden pasa a vending_delivery_error con descripción \"Se atascó el producto en la máquina\"."
-          },
-          "response": []
-        },
-        {
-          "name": "ERROR - Entrega de producto sin stock físico",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"reference\": \"{{test_reference}}\",\n  \"status\": \"ERROR\",\n  \"description\": \"DISPENSING_NO_STOCK\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/status",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "status"
-              ]
-            },
-            "description": "Simula un error de dispensación (sin stock en la máquina).\n\nEspera: HTTP 200  \nResultado: Orden pasa a vending_delivery_error con descripción \"El producto no tiene stock\"."
-          },
-          "response": []
-        },
-        {
-          "name": "ERROR - Entrega con fallo mecánico",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"reference\": \"{{test_reference}}\",\n  \"status\": \"ERROR\",\n  \"description\": \"DISPENSING_MECHANICAL_FAILURE\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/status",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "status"
-              ]
-            },
-            "description": "Simula un error de dispensación (fallo mecánico).\n\nEspera: HTTP 200  \nResultado: Orden pasa a vending_delivery_error con descripción \"Hubo un fallo mecánico\"."
-          },
-          "response": []
-        },
-        {
-          "name": "ERROR - Sistema offline",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"reference\": \"{{test_reference}}\",\n  \"status\": \"ERROR\",\n  \"description\": \"SYSTEM_OFFLINE\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/status",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "status"
-              ]
-            },
-            "description": "Simula un error de sistema (por algun fallo en la API).\n\nEspera: HTTP 200  \nResultado: Orden cambia de estado y muestra en el frontend \"Ocurrió un error\"."
-          },
-          "response": []
-        },
-        {
-          "name": "ERROR - Sistema internal error",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"reference\": \"{{test_reference}}\",\n  \"status\": \"ERROR\",\n  \"description\": \"SYSTEM_INTERNAL_ERROR\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/status",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "status"
-              ]
-            },
-            "description": "Simula un error de sistema (por algun fallo en la API).\n\nEspera: HTTP 200  \nResultado: Orden cambia de estado y muestra en el frontend \"Ocurrió un error\"."
-          },
-          "response": []
-        },
-        {
-          "name": "ERROR - Reference faltante (400)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"SUCCESS\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/status",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "status"
-              ]
-            },
-            "description": "Prueba validación: enviar webhook sin reference.\n\nEspera: HTTP 400  \nMensaje: \"Missing required fields: reference and status\""
-          },
-          "response": []
-        },
-        {
-          "name": "ERROR - Status inválido (400)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"reference\": \"{{test_reference}}\",\n  \"status\": \"PENDING\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/status",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "status"
-              ]
-            },
-            "description": "Prueba validación: status inválido.\n\nEspera: HTTP 400\nMensaje: \"Invalid status value: PENDING. Must be SUCCESS or ERROR\""
-          },
-          "response": []
-        },
-        {
-          "name": "ERROR - JSON inválido (400)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{ invalid json here"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/status",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "status"
-              ]
-            },
-            "description": "Prueba validación: JSON malformado.\n\nEspera: HTTP 400\nMensaje: \"Invalid JSON\""
-          },
-          "response": []
-        },
-        {
-          "name": "ERROR - Reference no existe (200)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"reference\": \"nonexistent-reference-12345\",\n  \"status\": \"SUCCESS\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/status",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "status"
-              ]
-            },
-            "description": "Prueba orden no encontrada.\n\nEspera: HTTP 200  \nNota: Winfas reintentará y eventualmente encontrará la orden cuando se cree."
-          },
-          "response": []
+              "raw": "{{base_url}}/v1/vending/webhook/delivery_status",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "delivery_status"]
+            }
+          }
         }
       ]
-    },
-    {
-      "name": "Load Webhook",
-      "item": [
-        {
-          "name": "Carga exitosa de stock",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"machine\": \"{{test_machine_code}}\",\n  \"slot\": 1,\n  \"quantity\": 1\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/load",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "load"
-              ]
-            },
-            "description": "Actualiza el stock de un slot.\n\nEspera: HTTP 200\nResultado: stock.quant actualizado con la nueva cantidad.\n\nNota: Cambiar {{test_machine_code}} por el provider_machine_code real de tu máquina."
-          },
-          "response": []
-        },
-        {
-          "name": "Carga - Slot vacío (cantidad 0)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"machine\": \"{{test_machine_code}}\",\n  \"slot\": 1,\n  \"quantity\": 0\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/load",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "load"
-              ]
-            },
-            "description": "Marca un slot como vacío.\n\nEspera: HTTP 200\nResultado: stock.quant actualizado a 0."
-          },
-          "response": []
-        },
-        {
-          "name": "Carga - Reposición completa",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"machine\": \"{{test_machine_code}}\",\n  \"slot\": 1,\n  \"quantity\": 20\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/load",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "load"
-              ]
-            },
-            "description": "Simula reposición completa de un slot.\n\nEspera: HTTP 200\nResultado: stock.quant actualizado a 20."
-          },
-          "response": []
-        },
-        {
-          "name": "ERROR - Campos faltantes (400)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"machine\": \"{{test_machine_code}}\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/load",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "load"
-              ]
-            },
-            "description": "Prueba validación: campos faltantes.\n\nEspera: HTTP 400\nMensaje: \"Missing required fields: machine, slot, quantity\""
-          },
-          "response": []
-        },
-        {
-          "name": "ERROR - Máquina no existe (404)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"machine\": \"nonexistent-machine-123\",\n  \"slot\": 1,\n  \"quantity\": 10\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/load",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "load"
-              ]
-            },
-            "description": "Prueba máquina no encontrada.\n\nEspera: HTTP 404\nMensaje: \"Machine nonexistent-machine-123 not found\""
-          },
-          "response": []
-        },
-        {
-          "name": "ERROR - Slot no existe (404)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"machine\": \"{{test_machine_code}}\",\n  \"slot\": 999,\n  \"quantity\": 10\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/load",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "load"
-              ]
-            },
-            "description": "Prueba slot no encontrado.\n\nEspera: HTTP 404\nMensaje: \"Slot 999 not found in machine {machine_code}\""
-          },
-          "response": []
-        },
-        {
-          "name": "ERROR - Slot sin producto asignado (400)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"machine\": \"{{test_machine_code}}\",\n  \"slot\": 99,\n  \"quantity\": 10\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/load",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "vending",
-                "webhook",
-                "load"
-              ]
-            },
-            "description": "Prueba slot sin producto configurado.\n\nEspera: HTTP 400\nMensaje: \"Slot {slot_name} has no product assigned\"\n\nNota: Cambiar el número de slot por uno que exista pero no tenga producto."
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "Load Webhook - Batch (Array)",
-      "item": [
-        {
-          "name": "Batch - Reposición completa de máquina",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Content-Type JSON', () => pm.response.to.have.header('Content-Type', 'application/json'));",
-                  "const body = pm.response.json();",
-                  "pm.test('Tiene campo results', () => pm.expect(body).to.have.property('results'));",
-                  "pm.test('Todos los items procesados OK', () => {",
-                  "  body.results.forEach((r, i) => {",
-                  "    pm.expect(r.status, `item[${i}].status`).to.equal('ok');",
-                  "  });",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "[\n  { \"machine\": \"{{test_machine_code}}\", \"slot\": 1, \"quantity\": 10 },\n  { \"machine\": \"{{test_machine_code}}\", \"slot\": 2, \"quantity\": 8  },\n  { \"machine\": \"{{test_machine_code}}\", \"slot\": 3, \"quantity\": 5  }\n]"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/load",
-              "host": [ "{{base_url}}" ],
-              "path": [ "v1", "vending", "webhook", "load" ]
-            },
-            "description": "Actualiza el stock de 3 slots en una sola llamada.\n\nEspera: HTTP 200, Content-Type application/json\nBody: { \"results\": [ { \"status\": \"ok\", ... }, ... ] }\n\nTodos los items deben tener status=ok."
-          },
-          "response": []
-        },
-        {
-          "name": "Batch - Vaciar todos los slots",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
-                  "const body = pm.response.json();",
-                  "pm.test('Todos los items OK con quantity 0', () => {",
-                  "  body.results.forEach((r, i) => {",
-                  "    pm.expect(r.status, `item[${i}].status`).to.equal('ok');",
-                  "    pm.expect(r.quantity, `item[${i}].quantity`).to.equal(0);",
-                  "  });",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "[\n  { \"machine\": \"{{test_machine_code}}\", \"slot\": 1, \"quantity\": 0 },\n  { \"machine\": \"{{test_machine_code}}\", \"slot\": 2, \"quantity\": 0 },\n  { \"machine\": \"{{test_machine_code}}\", \"slot\": 3, \"quantity\": 0 }\n]"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/load",
-              "host": [ "{{base_url}}" ],
-              "path": [ "v1", "vending", "webhook", "load" ]
-            },
-            "description": "Vacía todos los slots en una sola llamada.\n\nEspera: HTTP 200\nResultado: stock.quant = 0 en cada slot."
-          },
-          "response": []
-        },
-        {
-          "name": "Batch - Mix de máquinas",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
-                  "const body = pm.response.json();",
-                  "pm.test('Tiene results', () => pm.expect(body.results).to.be.an('array').with.lengthOf(2));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "[\n  { \"machine\": \"{{test_machine_code}}\",  \"slot\": 1, \"quantity\": 10 },\n  { \"machine\": \"{{test_machine_code_2}}\", \"slot\": 1, \"quantity\": 7  }\n]"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/load",
-              "host": [ "{{base_url}}" ],
-              "path": [ "v1", "vending", "webhook", "load" ]
-            },
-            "description": "Actualiza slots de dos máquinas distintas en una sola llamada.\n\nRequiere la variable {{test_machine_code_2}} con el código de una segunda máquina."
-          },
-          "response": []
-        },
-        {
-          "name": "Batch - Parcialmente inválido (mix ok/error)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('HTTP 200 aunque haya errores individuales', () => pm.response.to.have.status(200));",
-                  "const body = pm.response.json();",
-                  "pm.test('Primer item OK', () => pm.expect(body.results[0].status).to.equal('ok'));",
-                  "pm.test('Segundo item error (máquina inexistente)', () => {",
-                  "  pm.expect(body.results[1].status).to.equal('error');",
-                  "  pm.expect(body.results[1].http_status).to.equal(404);",
-                  "});",
-                  "pm.test('Tercer item OK (no afectado por el error anterior)', () => pm.expect(body.results[2].status).to.equal('ok'));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "[\n  { \"machine\": \"{{test_machine_code}}\",  \"slot\": 1,   \"quantity\": 10 },\n  { \"machine\": \"maquina-inexistente\",      \"slot\": 1,   \"quantity\": 5  },\n  { \"machine\": \"{{test_machine_code}}\",  \"slot\": 2,   \"quantity\": 8  }\n]"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/load",
-              "host": [ "{{base_url}}" ],
-              "path": [ "v1", "vending", "webhook", "load" ]
-            },
-            "description": "Batch con un item inválido en el medio.\n\nEspera: HTTP 200 (siempre en modo batch)\nResultado:\n- item[0]: status=ok\n- item[1]: status=error, http_status=404 (máquina no encontrada)\n- item[2]: status=ok (se procesa independientemente del error anterior)\n\nVerifica que un error individual no aborta el resto del batch."
-          },
-          "response": []
-        },
-        {
-          "name": "Batch - Slot inexistente en todos (todos error)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('HTTP 200 incluso si todos fallan', () => pm.response.to.have.status(200));",
-                  "const body = pm.response.json();",
-                  "pm.test('Todos los items son errores', () => {",
-                  "  body.results.forEach((r, i) => {",
-                  "    pm.expect(r.status, `item[${i}].status`).to.equal('error');",
-                  "  });",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "[\n  { \"machine\": \"maquina-a\", \"slot\": 1, \"quantity\": 10 },\n  { \"machine\": \"maquina-b\", \"slot\": 2, \"quantity\": 5  }\n]"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/load",
-              "host": [ "{{base_url}}" ],
-              "path": [ "v1", "vending", "webhook", "load" ]
-            },
-            "description": "Batch donde todos los items tienen máquinas inexistentes.\n\nEspera: HTTP 200 (el endpoint siempre retorna 200 en modo batch)\nTodos los results deben tener status=error."
-          },
-          "response": []
-        },
-        {
-          "name": "Batch - Array vacío (400)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('HTTP 400 para array vacío', () => pm.response.to.have.status(400));"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "[]"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/vending/webhook/load",
-              "host": [ "{{base_url}}" ],
-              "path": [ "v1", "vending", "webhook", "load" ]
-            },
-            "description": "Array vacío debe rechazarse con HTTP 400."
-          },
-          "response": []
-        }
-      ]
-    }
-  ],
-  "event": [
-    {
-      "listen": "prerequest",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          ""
-        ]
-      }
-    },
-    {
-      "listen": "test",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          ""
-        ]
-      }
     }
   ],
   "variable": [
-    {
-      "key": "base_url",
-      "value": "http://localhost:8087"
-    },
-    {
-      "key": "test_reference",
-      "value": "REEMPLAZAR_CON_REFERENCE_REAL",
-      "description": "Reference de una orden creada con QR. Obtenerla desde /v1/vending/qr/create"
-    },
-    {
-      "key": "test_machine_code",
-      "value": "122",
-      "description": "provider_machine_code de la máquina principal (ej: 2209270151)"
-    },
-    {
-      "key": "test_machine_code_2",
-      "value": "REEMPLAZAR_CON_SEGUNDO_MACHINE_CODE",
-      "description": "provider_machine_code de una segunda máquina (usado en el test de batch mix)"
-    }
+    { "key": "base_url", "value": "http://localhost:8069" },
+    { "key": "api_key", "value": "replace-with-machine-api-key" },
+    { "key": "test_reference", "value": "replace-with-existing-reference" }
   ]
 }

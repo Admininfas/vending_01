@@ -4,15 +4,16 @@
 Controller para webhooks de vending machines.
 
 Implementa 2 endpoints públicos HTTP (type='http'):
-- POST /v1/vending/webhook/status: Estado de transacciones (Winfas)
+- POST /v1/vending/webhook/payment_status: Estado de pago
+- POST /v1/vending/webhook/delivery_status: Estado de entrega
 - POST /v1/vending/webhook/load: Información de carga de stock
 
 Seguridad:
-- Sin HMAC ni API key. La seguridad se gestiona por whitelist de IP
-  a nivel de reverse proxy / firewall.
+- Requiere API key por máquina en header x-api-key.
 
 Formato Winfas:
-- POST JSON con { reference, status: SUCCESS|ERROR, description: str }
+- payment_status: { reference, status, description }
+- delivery_status: { reference, status: SUCCESS|ERROR, description }
 - Winfas reintenta si no recibe HTTP 200: a los 5s, 10s, 20s
 - Winfas puede reenviar incluso después de recibir 200 → idempotencia
 
@@ -34,33 +35,44 @@ LOG_SEP = "=" * 60
 
 class VendingWebhookController(http.Controller):
     """Controller para webhooks de vending machines (compatible con Winfas)."""
+    # 'APPROVED': 'Pago Aprobado', 
+    # 'AUTHORIZED': 'Pago Autorizado',
+    # 'IN_PROCESS': 'Pago en Revisión', 
+    # 'REJECTED': 'Pago Rechazado', 
+    # 'CANCELLED': 'Pago Cancelado', 
+    # 'REFUNDED': 'Pago Devuelto'
+
+
+    PAYMENT_STATUS_VALUES = {
+        'APPROVED',
+        'AUTHORIZED',
+        'IN_PROCESS',
+        'REJECTED',
+        'CANCELLED',
+        'REFUNDED',
+    }
+    DELIVERY_STATUS_VALUES = {'SUCCESS', 'ERROR'}
 
     # ------------------------------------------------------------------
     # Endpoints públicos
     # ------------------------------------------------------------------
     @http.route(
-        '/v1/vending/webhook/status',
+        '/v1/vending/webhook/payment_status',
         type='http', auth='public', methods=['POST'], csrf=False,
     )
-    def webhook_status(self, **kwargs):
-        """
-        Recibe actualizaciones de estado de transacciones desde Winfas.
-
-        Payload esperado (Winfas):
-        {
-            "reference": "string",
-            "status": "SUCCESS" | "ERROR",
-            "description": "string" (opcional)
-        }
-
-        Códigos de respuesta:
-        - 200: OK (procesado o duplicado)
-        - 400: Payload inválido
-        - 500: Error interno (reintentar)
-        """
+    def webhook_payment_status(self, **kwargs):
         _logger.info(f"{LOG_SEP}")
-        _logger.info(f"[WEBHOOK STATUS] POST /v1/vending/webhook/status recibido")
-        return self._process_status_webhook(request)
+        _logger.info('[WEBHOOK PAYMENT] POST /v1/vending/webhook/payment_status recibido')
+        return self._process_payment_status_webhook(request)
+
+    @http.route(
+        '/v1/vending/webhook/delivery_status',
+        type='http', auth='public', methods=['POST'], csrf=False,
+    )
+    def webhook_delivery_status(self, **kwargs):
+        _logger.info(f"{LOG_SEP}")
+        _logger.info('[WEBHOOK DELIVERY] POST /v1/vending/webhook/delivery_status recibido')
+        return self._process_delivery_status_webhook(request)
 
 
     @http.route(
@@ -92,46 +104,88 @@ class VendingWebhookController(http.Controller):
     # ------------------------------------------------------------------
     # Procesamiento de webhooks
     # ------------------------------------------------------------------
-    def _process_status_webhook(self, request_obj):
-        """Procesa webhook de status con códigos HTTP apropiados."""
+    def _extract_api_key(self, request_obj):
+        """Obtiene x-api-key contemplando case-insensitive en header name."""
+        headers = request_obj.httprequest.headers
+        for key, value in headers.items():
+            if key and key.lower() == 'x-api-key':
+                return (value or '').strip()
+        return ''
+
+    def _authenticate_machine(self, machine, request_obj, reference, raw_body, endpoint_type):
+        """Valida API key contra la máquina objetivo y devuelve response en error."""
+        inbound_key = self._extract_api_key(request_obj)
+        if not machine.api_key_configured:
+            self._log_webhook(
+                reference,
+                raw_body,
+                endpoint_type,
+                error_msg='Machine has no API key configured',
+                processing_result='auth_error',
+            )
+            return self._make_response('Unauthorized', 401)
+
+        if not machine.is_api_key_valid(inbound_key):
+            self._log_webhook(
+                reference,
+                raw_body,
+                endpoint_type,
+                error_msg='Invalid API key',
+                processing_result='auth_error',
+            )
+            return self._make_response('Unauthorized', 401)
+        return None
+
+    def _parse_request_json(self, request_obj, endpoint_type):
+        """Lee body + parsea JSON. Retorna (raw_body, data, response_error)."""
         # ── Lectura del body ──
         try:
             raw_body = request_obj.httprequest.get_data(as_text=True)
-            _logger.info(f"[WEBHOOK STATUS] Body: {raw_body}")
-        except Exception as e:
-            _logger.exception("[WEBHOOK STATUS] Error leyendo body")
-            return self._make_response('Error reading request body', 500)
+            _logger.info('[WEBHOOK %s] Body: %s', endpoint_type.upper(), raw_body)
+        except Exception:
+            _logger.exception('[WEBHOOK %s] Error leyendo body', endpoint_type.upper())
+            return '', None, self._make_response('Error reading request body', 500)
 
         # ── Parsing JSON ──
         try:
             data = json.loads(raw_body) if raw_body else {}
-        except (json.JSONDecodeError, ValueError) as e:
-            _logger.error(f"[WEBHOOK STATUS] JSON inválido: {raw_body}")
-            self._log_webhook('', raw_body, 'status',
-                              error_msg=f'Invalid JSON: {str(e)}',
-                              processing_result='validation_error')
-            return self._make_response('Invalid JSON', 400)
+        except (json.JSONDecodeError, ValueError) as error:
+            _logger.error('[WEBHOOK %s] JSON inválido: %s', endpoint_type.upper(), raw_body)
+            self._log_webhook(
+                '', raw_body, endpoint_type,
+                error_msg=f'Invalid JSON: {str(error)}',
+                processing_result='validation_error',
+            )
+            return raw_body, None, self._make_response('Invalid JSON', 400)
+
+        return raw_body, data, None
+
+    def _process_payment_status_webhook(self, request_obj):
+        """Procesa webhook de pago con validación de API key."""
+        raw_body, data, response_error = self._parse_request_json(request_obj, 'payment_status')
+        if response_error:
+            return response_error
 
         # ── Validación de campos ──
         reference = data.get('reference', '')
-        status = data.get('status', '')
+        status = str(data.get('status', '')).upper()
         description = data.get('description', '')
 
-        _logger.info(f"[WEBHOOK STATUS] reference={reference}, status={status}")
+        _logger.info('[WEBHOOK PAYMENT] reference=%s, status=%s', reference, status)
 
         if not reference or not status:
-            _logger.warning(f"[WEBHOOK STATUS] Campos faltantes")
-            self._log_webhook(reference, raw_body, 'status',
+            _logger.warning('[WEBHOOK PAYMENT] Campos faltantes')
+            self._log_webhook(reference, raw_body, 'payment_status',
                               error_msg='Missing required fields',
                               processing_result='validation_error')
             return self._make_response('Missing required fields: reference and status', 400)
 
-        if status not in ('SUCCESS', 'ERROR'):
-            _logger.warning(f"[WEBHOOK STATUS] Status inválido: {status}")
-            self._log_webhook(reference, raw_body, 'status',
+        if status not in self.PAYMENT_STATUS_VALUES:
+            _logger.warning('[WEBHOOK PAYMENT] Status inválido: %s', status)
+            self._log_webhook(reference, raw_body, 'payment_status',
                               error_msg=f'Invalid status: {status}',
                               processing_result='validation_error')
-            return self._make_response(f'Invalid status value: {status}. Must be SUCCESS or ERROR', 400)
+            return self._make_response('Invalid payment status value', 400)
 
         # ── Buscar orden ──
         env = request_obj.env
@@ -140,42 +194,124 @@ class VendingWebhookController(http.Controller):
         ], limit=1)
 
         if not order:
-            _logger.warning(f"[WEBHOOK STATUS] Orden no encontrada: {reference}")
-            self._log_webhook(reference, raw_body, 'status',
+            _logger.warning('[WEBHOOK PAYMENT] Orden no encontrada: %s', reference)
+            self._log_webhook(reference, raw_body, 'payment_status',
                               error_msg='Order not found',
                               processing_result='order_not_found')
             return self._make_response('OK', 200)
 
-        _logger.info(f"[WEBHOOK STATUS] Orden encontrada: id={order.id}, status={order.vending_status}")
+        auth_error = self._authenticate_machine(order.vending_machine_id, request_obj, reference, raw_body, 'payment_status')
+        if auth_error:
+            return auth_error
+
+        _logger.info('[WEBHOOK PAYMENT] Orden encontrada: id=%s, status=%s', order.id, order.vending_status)
 
         # ── Procesamiento ──
         try:
-            audit = order.apply_webhook_status(status, description=description)
+            actions = {'payment_status': status}
+            is_processed = False
+            processing_result = 'processed'
+            notification_description = description
 
-            processing_result = audit.get('result', 'internal_error')
-            is_processed = audit.get('processed', False)
-            actions = audit.get('actions', {})
+            if status in ('APPROVED', 'AUTHORIZED'):
+                is_processed = order.mark_as_payment_success()
+                actions['marked_as'] = 'payment_success'
+            elif status in ('REJECTED', 'CANCELLED', 'REFUNDED'):
+                payment_error_code = description or f'PAYMENT_{status}'
+                payment_error_description = order._get_user_friendly_error_description(payment_error_code)
+                is_processed = order.mark_as_payment_error(error_description=payment_error_description)
+                actions['marked_as'] = 'payment_error'
+                actions['payment_error_code'] = payment_error_code
+                actions['payment_error_description'] = payment_error_description
+                notification_description = payment_error_description
+            else:
+                # IN_PROCESS: evento válido, sin cambio terminal
+                actions['marked_as'] = 'no_change'
 
             if is_processed:
-                _logger.info(f"[WEBHOOK STATUS] Orden {order.id} actualizada con status={status}")
-                self._notify_kiosk(env, reference, order.vending_status, description)
+                _logger.info('[WEBHOOK PAYMENT] Orden %s actualizada con status=%s', order.id, status)
+                self._notify_kiosk(env, reference, order.vending_status, notification_description)
                 actions['bus_notified'] = True
             else:
                 _logger.info(
-                    f"[WEBHOOK STATUS] Orden {order.id} no actualizada "
-                    f"(resultado: {processing_result})"
+                    '[WEBHOOK PAYMENT] Orden %s sin cambio de estado terminal', order.id
                 )
 
-            self._log_webhook(reference, raw_body, 'status',
+            self._log_webhook(reference, raw_body, 'payment_status',
                               processing_result=processing_result,
                               actions=actions)
             _logger.info(f"{LOG_SEP}")
             return self._make_response('OK', 200)
 
-        except Exception as e:
-            _logger.exception(f"[WEBHOOK STATUS] Error interno procesando")
-            self._log_webhook(reference, raw_body, 'status',
-                              error_msg=f'Internal error: {str(e)}',
+        except Exception as error:
+            _logger.exception('[WEBHOOK PAYMENT] Error interno procesando')
+            self._log_webhook(reference, raw_body, 'payment_status',
+                              error_msg=f'Internal error: {str(error)}',
+                              processing_result='internal_error')
+            _logger.info(f"{LOG_SEP}")
+            return self._make_response('Internal server error', 500)
+
+    def _process_delivery_status_webhook(self, request_obj):
+        """Procesa webhook de entrega con validación de API key."""
+        raw_body, data, response_error = self._parse_request_json(request_obj, 'delivery_status')
+        if response_error:
+            return response_error
+
+        reference = data.get('reference', '')
+        status = str(data.get('status', '')).upper()
+        description = data.get('description', '')
+
+        _logger.info('[WEBHOOK DELIVERY] reference=%s, status=%s', reference, status)
+
+        if not reference or not status:
+            self._log_webhook(reference, raw_body, 'delivery_status',
+                              error_msg='Missing required fields',
+                              processing_result='validation_error')
+            return self._make_response('Missing required fields: reference and status', 400)
+
+        if status not in self.DELIVERY_STATUS_VALUES:
+            self._log_webhook(reference, raw_body, 'delivery_status',
+                              error_msg=f'Invalid status: {status}',
+                              processing_result='validation_error')
+            return self._make_response('Invalid delivery status value', 400)
+
+        env = request_obj.env
+        order = env['pos.order'].sudo().search([
+            ('vending_reference', '=', reference),
+        ], limit=1)
+
+        if not order:
+            self._log_webhook(reference, raw_body, 'delivery_status',
+                              error_msg='Order not found',
+                              processing_result='order_not_found')
+            return self._make_response('OK', 200)
+
+        auth_error = self._authenticate_machine(order.vending_machine_id, request_obj, reference, raw_body, 'delivery_status')
+        if auth_error:
+            return auth_error
+
+        provider_status = 'SUCCESS' if status == 'SUCCESS' else 'ERROR'
+
+        try:
+            audit = order.apply_webhook_status(provider_status, description=description)
+            processing_result = audit.get('result', 'internal_error')
+            is_processed = audit.get('processed', False)
+            actions = audit.get('actions', {})
+
+            if is_processed:
+                self._notify_kiosk(env, reference, order.vending_status, description)
+                actions['bus_notified'] = True
+
+            self._log_webhook(reference, raw_body, 'delivery_status',
+                              processing_result=processing_result,
+                              actions=actions)
+            _logger.info(f"{LOG_SEP}")
+            return self._make_response('OK', 200)
+
+        except Exception as error:
+            _logger.exception('[WEBHOOK DELIVERY] Error interno procesando')
+            self._log_webhook(reference, raw_body, 'delivery_status',
+                              error_msg=f'Internal error: {str(error)}',
                               processing_result='internal_error')
             _logger.info(f"{LOG_SEP}")
             return self._make_response('Internal server error', 500)
@@ -223,7 +359,7 @@ class VendingWebhookController(http.Controller):
 
         for idx, item in enumerate(items):
             label = f"item[{idx}]" if is_batch else "item"
-            result = self._process_single_load_item(env, item, raw_body, label)
+            result = self._process_single_load_item(env, request_obj, item, raw_body, label)
             results.append(result)
 
         # ── Respuesta ──
@@ -247,7 +383,7 @@ class VendingWebhookController(http.Controller):
             _logger.info(f"{LOG_SEP}")
             return self._make_response(single.get('message', 'OK'), single.get('http_status', 200))
 
-    def _process_single_load_item(self, env, item, raw_body, label='item'):
+    def _process_single_load_item(self, env, request_obj, item, raw_body, label='item'):
         """
         Procesa un único objeto de carga de stock.
 
@@ -291,6 +427,17 @@ class VendingWebhookController(http.Controller):
                 self._log_webhook('', raw_body, 'load', error_msg=msg)
                 return {'status': 'error', 'http_status': 404, 'message': msg,
                         'machine': machine_code, 'slot': slot_number}
+
+            auth_error = self._authenticate_machine(machine, request_obj, f'{machine_code}/{slot_number}', raw_body, 'load')
+            if auth_error:
+                msg = 'Unauthorized'
+                return {
+                    'status': 'error',
+                    'http_status': 401,
+                    'message': msg,
+                    'machine': machine_code,
+                    'slot': slot_number,
+                }
 
             # Buscar slot
             slot = env['vending.slot'].sudo().search([
@@ -401,7 +548,7 @@ class VendingWebhookController(http.Controller):
         Args:
             reference: Referencia de la transacción
             raw_body: Body crudo del request
-            endpoint_type: 'status' o 'load'
+            endpoint_type: 'payment_status', 'delivery_status' o 'load'
             error_msg: Mensaje de error (si hubo)
             processing_result: 'processed', 'duplicate', 'late_arrival', etc.
             actions: Dict con acciones realizadas (se serializa a JSON compacto)

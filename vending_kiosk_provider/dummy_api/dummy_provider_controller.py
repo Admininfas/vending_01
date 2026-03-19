@@ -16,6 +16,7 @@ import json
 import uuid
 import hashlib
 import logging
+import requests
 from datetime import datetime, timedelta
 from urllib.parse import quote
 from odoo import http  # type: ignore
@@ -36,6 +37,23 @@ class DummyWinfasController(http.Controller):
     ELIMINAR este archivo cuando se integre con Winfas real.
     Solo actualizar la URL base en vending_provider_client.py
     """
+
+    def _extract_api_key(self):
+        headers = request.httprequest.headers
+        for key, value in headers.items():
+            if key and key.lower() == 'x-api-key':
+                return (value or '').strip()
+        return ''
+
+    def _validate_machine_api_key(self, machine_code):
+        api_key = self._extract_api_key()
+        machine = request.env['vending.machine'].sudo().search([
+            ('code', '=', machine_code),
+        ], limit=1)
+
+        if not machine:
+            return False
+        return machine.is_api_key_valid(api_key)
 
     @http.route(
         '/dummy/payments/qr/<string:machine>',
@@ -66,6 +84,9 @@ class DummyWinfasController(http.Controller):
         try:
             _logger.info(f"{LOG_SEP}")
             _logger.info(f"[DUMMY API] === RECIBIDO POST /payments/qr/{machine} ===")
+
+            if not self._validate_machine_api_key(machine):
+                return self._error_response('Unauthorized', 401)
             
             body_raw = request.httprequest.get_data(as_text=True)
             _logger.info(f"[DUMMY API] Body: {body_raw[:200]}...")
@@ -214,6 +235,9 @@ class DummyWinfasController(http.Controller):
             }, status=404)
         
         qr_data = _dummy_qr_storage.get(qr_uuid, {})
+        machine_code = qr_data.get('machine')
+        if not machine_code or not self._validate_machine_api_key(machine_code):
+            return self._error_response('Unauthorized', 401)
         
         # Verificar expiración
         expires_at_str = qr_data.get('expires_at')
@@ -363,34 +387,72 @@ class DummyWinfasController(http.Controller):
         _logger.info(f"[WEBHOOK INTERNO] reference={reference}, status={status}")
         
         try:
-            # Buscar la orden y actualizar directamente
-            # (simulando lo que haría el webhook)
             order = request.env['pos.order'].sudo().search([
                 ('vending_reference', '=', reference)
             ], limit=1)
-            
+
             if not order:
                 _logger.error(f"[WEBHOOK INTERNO] ✗ Orden no encontrada con reference={reference}")
                 return False
-            
-            _logger.info(f"[WEBHOOK INTERNO] ✓ Orden encontrada: id={order.id}, state={order.state}, vending_status={order.vending_status}")
-            
-            # Solo actualizar si no está ya en delivery success (idempotencia)
-            if order.vending_status == 'vending_delivery_success':
-                _logger.info(f"[WEBHOOK INTERNO] ✓ Ya procesado (idempotente), ignorando")
-                return True  # Ya procesado, ignorar
-            
-            updated = order.apply_webhook_status(status, description=description)
-            if updated:
-                _logger.info(f"[WEBHOOK INTERNO] ✓ Orden actualizada: vending_status={order.vending_status}")
-                _logger.info(f"[WEBHOOK INTERNO] === FIN WEBHOOK (SUCCESS) ===")
-                return True
-            
-            _logger.warning(f"[WEBHOOK INTERNO] ✗ Status no reconocido: {status}")
-            return False
-            
-        except Exception as e:
-            _logger.error(f"[WEBHOOK INTERNO] ✗ Error: {e}")
+
+            machine = order.vending_machine_id
+            if not machine:
+                _logger.error(f"[WEBHOOK INTERNO] ✗ Orden sin máquina asociada")
+                return False
+
+            api_key = machine.get_api_key()
+            if not api_key:
+                _logger.error(f"[WEBHOOK INTERNO] ✗ Máquina sin API key configurada")
+                return False
+
+            base_url = request.httprequest.host_url.rstrip('/')
+            headers = {
+                'Content-Type': 'application/json',
+                'x-api-key': api_key,
+                'X-Odoo-Database': request.db,
+            }
+
+            if status == 'SUCCESS':
+                payment_response = requests.post(
+                    f'{base_url}/v1/vending/webhook/payment_status',
+                    json={
+                        'reference': reference,
+                        'status': 'APPROVED',
+                        'description': description or 'DUMMY_PAYMENT_APPROVED',
+                    },
+                    headers=headers,
+                    timeout=10,
+                )
+                if payment_response.status_code != 200:
+                    _logger.error('[WEBHOOK INTERNO] ✗ payment_status falló HTTP %s', payment_response.status_code)
+                    return False
+
+                delivery_response = requests.post(
+                    f'{base_url}/v1/vending/webhook/delivery_status',
+                    json={
+                        'reference': reference,
+                        'status': 'SUCCESS',
+                        'description': description or 'DUMMY_DELIVERY_SUCCESS',
+                    },
+                    headers=headers,
+                    timeout=10,
+                )
+                return delivery_response.status_code == 200
+
+            delivery_response = requests.post(
+                f'{base_url}/v1/vending/webhook/delivery_status',
+                json={
+                    'reference': reference,
+                    'status': 'ERROR',
+                    'description': description or 'DUMMY_DELIVERY_ERROR',
+                },
+                headers=headers,
+                timeout=10,
+            )
+            return delivery_response.status_code == 200
+
+        except Exception as error:
+            _logger.error(f"[WEBHOOK INTERNO] ✗ Error: {error}")
             return False
 
     def _validate_qr_request(self, payload):

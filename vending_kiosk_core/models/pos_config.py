@@ -16,6 +16,78 @@ _logger = logging.getLogger(__name__)
 class PosConfig(models.Model):
     _inherit = 'pos.config'
 
+    def get_vending_catalog_data(self):
+        """
+        Retorna datos de catálogo vending ordenados por menor code de slot.
+
+        Solo incluye productos que tengan al menos un slot activo,
+        con ubicación y stock mayor a 0.
+        """
+        self.ensure_one()
+
+        empty_result = {
+            'product_ids': [],
+            'product_slots': {},
+            'product_min_slot_code': {},
+        }
+
+        if not self.vending_machine_id:
+            return empty_result
+
+        all_slots = self.env['vending.slot'].search([
+            ('machine_id', '=', self.vending_machine_id.id),
+            ('is_active', '=', True),
+            ('location_id', '!=', False),
+        ], order='code, id')
+
+        # Forzar recálculo del campo computado antes de filtrar por stock.
+        all_slots._compute_current_stock()
+
+        slots_with_stock = all_slots.filtered(lambda s: s.current_stock > 0 and s.product_tmpl_id)
+        company_id = self.company_id.id
+
+        product_slots = {}
+        product_min_slot_code = {}
+        product_name_by_id = {}
+
+        for slot in slots_with_stock:
+            product = slot.product_tmpl_id
+            if product.company_id and product.company_id.id != company_id:
+                continue
+
+            product_id = product.id
+            if product_id not in product_slots:
+                product_slots[product_id] = []
+                product_min_slot_code[product_id] = slot.code
+                product_name_by_id[product_id] = (product.display_name or product.name or '').lower()
+
+            product_slots[product_id].append({
+                'code': slot.code,
+                'name': slot.name,
+                'stock': slot.current_stock,
+            })
+
+        sorted_product_ids = sorted(
+            product_slots.keys(),
+            key=lambda product_id: (
+                product_min_slot_code[product_id],
+                product_name_by_id.get(product_id, ''),
+                product_id,
+            )
+        )
+
+        _logger.info(
+            "[Vending] Catálogo máquina %s: %s productos ordenados por slot mínimo",
+            self.vending_machine_id.name,
+            len(sorted_product_ids),
+        )
+
+        return {
+            'product_ids': sorted_product_ids,
+            'product_slots': product_slots,
+            'product_min_slot_code': product_min_slot_code,
+        }
+
     vending_machine_id = fields.Many2one(
         'vending.machine',
         string='Máquina Expendedora',
@@ -72,46 +144,16 @@ class PosConfig(models.Model):
         if not self.vending_machine_id:
             _logger.warning("[Vending] get_available_vending_products: No hay máquina configurada")
             return self.env['product.template'].browse()
-        
-        # Forzar recálculo de current_stock antes de buscar
-        all_slots = self.env['vending.slot'].search([
-            ('machine_id', '=', self.vending_machine_id.id),
-            ('is_active', '=', True),
-            ('location_id', '!=', False),
-        ])
-        
-        # Forzar recálculo del campo computado
-        all_slots._compute_current_stock()
-        
-        _logger.info("[Vending] Slots de la máquina %s: %s", 
-                     self.vending_machine_id.name, 
-                     [(s.name, s.product_tmpl_id.name, s.current_stock) for s in all_slots])
-        
-        # Ahora buscar slots con stock > 0
-        slots_with_stock = all_slots.filtered(lambda s: s.current_stock > 0)
-        
-        _logger.info("[Vending] Slots con stock > 0: %s", 
-                     [(s.name, s.product_tmpl_id.name, s.current_stock) for s in slots_with_stock])
-        
-        products = slots_with_stock.mapped('product_tmpl_id')
-        
-        # Filtrar productos por company_id: solo los de esta compañía o compartidos (sin compañía)
-        company_id = self.company_id.id
-        products = products.filtered(
-            lambda p: not p.company_id or p.company_id.id == company_id
-        )
-        _logger.info("[Vending] Productos disponibles (filtrados por company_id=%s): %s (IDs: %s)", 
-                     company_id, products.mapped('name'), products.ids)
-        
-        return products
+
+        catalog_data = self.get_vending_catalog_data()
+        return self.env['product.template'].browse(catalog_data['product_ids'])
     
     def get_available_vending_product_ids(self):
         """
         Retorna solo los IDs de productos disponibles con stock > 0.
         Versión optimizada para llamadas desde frontend vía RPC.
         """
-        products = self.get_available_vending_products()
-        return products.ids
+        return self.get_vending_catalog_data()['product_ids']
     
     def get_best_slot_for_product(self, product_tmpl_id):
         """
@@ -166,30 +208,17 @@ class PosConfig(models.Model):
         """
         self.ensure_one()
         
-        if not self.vending_machine_id:
-            return {}
-        
-        # Buscar todos los slots activos con stock
-        slots = self.env['vending.slot'].search([
-            ('machine_id', '=', self.vending_machine_id.id),
-            ('is_active', '=', True),
-            ('location_id', '!=', False),
-            ('current_stock', '>', 0),
-        ], order='code')
-        
-        # Agrupar por producto
-        result = {}
-        for slot in slots:
-            product_id = slot.product_tmpl_id.id
-            if product_id not in result:
-                result[product_id] = []
-            result[product_id].append({
-                'code': slot.code,
-                'name': slot.name,
-                'stock': slot.current_stock,
-            })
-        
-        return result
+        return self.get_vending_catalog_data()['product_slots']
+
+    def get_product_min_slot_code_map(self):
+        """
+        Retorna el menor code de slot activo con stock por producto.
+
+        Returns:
+            dict: {product_id: min_slot_code}
+        """
+        self.ensure_one()
+        return self.get_vending_catalog_data()['product_min_slot_code']
 
     @api.model
     def _load_pos_self_data_search_read(self, response, config):
@@ -212,16 +241,17 @@ class PosConfig(models.Model):
                 records[0]['vending_countdown_seconds'] = 40  # Valor por defecto
                 records[0]['vending_qr_timeout_seconds'] = 120  # Valor por defecto
             else:
-                # Obtener productos disponibles para esta máquina
-                available_products = config.get_available_vending_products()
-                product_slots = config.get_all_product_slots()
-                records[0]['_vending_available_products'] = available_products.ids
+                # Obtener catálogo vending ordenado por menor slot.
+                catalog_data = config.get_vending_catalog_data()
+                records[0]['_vending_available_products'] = catalog_data['product_ids']
+                product_slots = catalog_data['product_slots']
                 records[0]['_vending_product_slots'] = product_slots
+                records[0]['_vending_product_min_slot_code'] = catalog_data['product_min_slot_code']
                 records[0]['_vending_machine_id'] = config.vending_machine_id.id
                 records[0]['vending_countdown_seconds'] = config.vending_countdown_seconds or 40
                 records[0]['vending_qr_timeout_seconds'] = config.vending_qr_timeout_seconds or 120
                 _logger.info("[Vending] Enviando al frontend _vending_available_products: %s", 
-                             available_products.ids)
+                             catalog_data['product_ids'])
                 _logger.info("[Vending] Enviando al frontend _vending_product_slots: %s productos con slots", 
                              len(product_slots))
                 

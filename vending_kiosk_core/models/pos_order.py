@@ -101,7 +101,8 @@ class PosOrder(models.Model):
         - vending_delivery_success: Entrega confirmada
         - vending_delivery_error: Error de entrega
         - payment_error: Error de pago
-        - payment_success: Pago confirmado
+        - qr_expired: QR vencido
+        - user_cancelled: Cancelada por usuario
         
         Returns:
             bool: True si es un webhook duplicado, False si es nuevo
@@ -113,7 +114,8 @@ class PosOrder(models.Model):
             'vending_delivery_success',
             'vending_delivery_error',
             'payment_error',
-            'payment_success'
+            'qr_expired',
+            'user_cancelled',
         )
         
         if self.vending_status in processed_statuses:
@@ -202,6 +204,7 @@ class PosOrder(models.Model):
             'PAYMENT_INSUFFICIENT_FUNDS': 'Fondos insuficientes en tu cuenta',
             'PAYMENT_NETWORK_ERROR': 'Error de conexión al procesar el pago',
             'PAYMENT_CANCELLED': 'El pago fue cancelado',
+            'PAYMENT_REFUNDED': 'Tu pago fue devuelto',
             'PAYMENT_INVALID_CARD': 'La tarjeta no es válida',
             'PAYMENT_EXPIRED_CARD': 'La tarjeta ha expirado',
             
@@ -580,8 +583,9 @@ class PosOrder(models.Model):
         else:
             _logger.warning(f"[PAYMENT ERROR] Sin descripción de error")
 
-        # Cancela la orden en el sistema de POS para que no quede en borrador
-        vals['state'] = 'cancel'
+        # Solo cancelar si sigue en draft; órdenes ya pagadas/finalizadas no permiten volver atrás.
+        if self.state == 'draft':
+            vals['state'] = 'cancel'
         self.sudo().write(vals)
         _logger.info(f"[PAYMENT ERROR] Order {self.vending_reference} marked as payment_error. vending_error_description={self.vending_error_description}")
         return True
@@ -591,6 +595,22 @@ class PosOrder(models.Model):
         Marca la orden como pago exitoso.
         """
         self.ensure_one()
+
+        terminal_statuses = {
+            'vending_delivery_success',
+            'vending_delivery_error',
+            'payment_error',
+            'qr_expired',
+            'user_cancelled',
+        }
+        if self.vending_status in terminal_statuses:
+            _logger.info(
+                "Ignoring payment_success transition for %s because current status is %s",
+                self.vending_reference,
+                self.vending_status,
+            )
+            return False
+
         self.write({'vending_status': 'payment_success'})
         _logger.info(f"Order {self.vending_reference} marked as payment_success")
         return True
@@ -636,8 +656,9 @@ class PosOrder(models.Model):
         else:
             _logger.warning(f"[DELIVERY ERROR] Sin descripción de error")
 
-        # Cancela la orden en el sistema de POS para que no quede en borrador
-        vals['state'] = 'cancel'
+        # Solo cancelar si sigue en draft; órdenes ya pagadas/finalizadas no permiten volver atrás.
+        if self.state == 'draft':
+            vals['state'] = 'cancel'
         self.sudo().write(vals)
         _logger.info(f"[DELIVERY ERROR] Order {self.vending_reference} marked as vending_delivery_error. vending_error_description={self.vending_error_description}")
         return True
