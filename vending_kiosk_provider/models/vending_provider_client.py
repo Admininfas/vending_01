@@ -143,7 +143,10 @@ class VendingProviderClient(models.AbstractModel):
                 timeout,
             )
 
-        endpoint = f"{base_url}/payments/qr/{machine_identifier}"
+        qr_endpoints = [
+            f"{base_url}/payment/qr/{machine_identifier}",
+            f"{base_url}/payments/qr/{machine_identifier}",
+        ]
         
         payload = {
             'reference': reference,
@@ -153,60 +156,90 @@ class VendingProviderClient(models.AbstractModel):
             'timeout': timeout,
         }
         
-        _logger.info(f"[PROVIDER CLIENT] Endpoint externo: POST {endpoint}")
+        _logger.info(
+            "[PROVIDER CLIENT] Endpoint externo (prioridad): POST %s",
+            qr_endpoints[0],
+        )
         _logger.info(f"[PROVIDER CLIENT] Payload: {json.dumps(payload)}")
         
         try:
-            response = requests.post(
-                endpoint,
-                json=payload,
-                headers=headers,
-                timeout=HTTP_REQUEST_TIMEOUT,
-            )
-            
-            _logger.info(f"[PROVIDER CLIENT] Response status: {response.status_code}")
-            _logger.info(
-                "[PROVIDER CLIENT] Response content-type: %s",
-                response.headers.get('Content-Type', ''),
-            )
-            
-            if response.status_code != 200:
-                error_msg = self._parse_error_response(response)
-                _logger.error(f"[PROVIDER CLIENT] ✗ Error del proveedor: {error_msg}")
-                raise UserError(f"Error del proveedor: {error_msg}")
-
-            raw_body = response.text or ''
-            if not raw_body.strip():
-                _logger.error("[PROVIDER CLIENT] ✗ Respuesta 200 vacía del proveedor")
-                raise UserError("El proveedor devolvió una respuesta vacía al generar QR")
-
-            try:
-                data = response.json()
-            except ValueError:
-                body_preview = raw_body[:300].replace('\n', ' ').replace('\r', ' ')
-                _logger.error(
-                    "[PROVIDER CLIENT] ✗ Respuesta 200 no-JSON. Body preview: %s",
-                    body_preview,
+            last_error_msg = None
+            for index, endpoint in enumerate(qr_endpoints):
+                _logger.info("[PROVIDER CLIENT] Intento %s -> POST %s", index + 1, endpoint)
+                response = requests.post(
+                    endpoint,
+                    json=payload,
+                    headers=headers,
+                    timeout=HTTP_REQUEST_TIMEOUT,
                 )
-                raise UserError("El proveedor devolvió una respuesta no válida al generar QR")
 
-            _logger.info(f"[PROVIDER CLIENT] ✓ Response body: {json.dumps(data)[:200]}...")
-            
-            # Acepta formato real (data_url) y dummy (url)
-            qr_url = data.get('data_url') or data.get('url')
-            if not qr_url or 'content' not in data:
-                _logger.error(f"[PROVIDER CLIENT] ✗ Respuesta inválida: {data}")
-                raise UserError("Respuesta inválida del proveedor")
-            
-            _logger.info(f"[PROVIDER CLIENT] ✓ QR generado exitosamente")
-            _logger.info(f"[PROVIDER CLIENT] === FIN SOLICITUD QR ===")
-            _logger.info(f"{LOG_SEP}")
-            
-            return {
-                'url': qr_url,
-                'content': data['content'],
-                'timeout': timeout,
-            }
+                _logger.info(f"[PROVIDER CLIENT] Response status: {response.status_code}")
+                _logger.info(
+                    "[PROVIDER CLIENT] Response content-type: %s",
+                    response.headers.get('Content-Type', ''),
+                )
+
+                if response.status_code != 200:
+                    error_msg = self._parse_error_response(response)
+                    last_error_msg = f"Error del proveedor: {error_msg}"
+                    _logger.error(
+                        "[PROVIDER CLIENT] ✗ Error en endpoint %s: %s",
+                        endpoint,
+                        error_msg,
+                    )
+                    if index == 0 and response.status_code in (404, 405):
+                        _logger.warning(
+                            "[PROVIDER CLIENT] Reintentando con endpoint alternativo por status %s",
+                            response.status_code,
+                        )
+                        continue
+                    raise UserError(last_error_msg)
+
+                raw_body = response.text or ''
+                if not raw_body.strip():
+                    last_error_msg = "El proveedor devolvió una respuesta vacía al generar QR"
+                    _logger.error("[PROVIDER CLIENT] ✗ Respuesta 200 vacía del proveedor")
+                    if index == 0:
+                        _logger.warning("[PROVIDER CLIENT] Reintentando con endpoint alternativo por body vacío")
+                        continue
+                    raise UserError(last_error_msg)
+
+                try:
+                    data = response.json()
+                except ValueError:
+                    body_preview = raw_body[:300].replace('\n', ' ').replace('\r', ' ')
+                    last_error_msg = "El proveedor devolvió una respuesta no válida al generar QR"
+                    _logger.error(
+                        "[PROVIDER CLIENT] ✗ Respuesta 200 no-JSON. Body preview: %s",
+                        body_preview,
+                    )
+                    if index == 0:
+                        _logger.warning("[PROVIDER CLIENT] Reintentando con endpoint alternativo por JSON inválido")
+                        continue
+                    raise UserError(last_error_msg)
+
+                _logger.info(f"[PROVIDER CLIENT] ✓ Response body: {json.dumps(data)[:200]}...")
+
+                # Acepta formato real (data_url) y dummy (url)
+                qr_url = data.get('data_url') or data.get('url')
+                if not qr_url or 'content' not in data:
+                    _logger.error(f"[PROVIDER CLIENT] ✗ Respuesta inválida: {data}")
+                    if index == 0:
+                        _logger.warning("[PROVIDER CLIENT] Reintentando con endpoint alternativo por schema inválido")
+                        continue
+                    raise UserError("Respuesta inválida del proveedor")
+
+                _logger.info(f"[PROVIDER CLIENT] ✓ QR generado exitosamente")
+                _logger.info(f"[PROVIDER CLIENT] === FIN SOLICITUD QR ===")
+                _logger.info(f"{LOG_SEP}")
+
+                return {
+                    'url': qr_url,
+                    'content': data['content'],
+                    'timeout': timeout,
+                }
+
+            raise UserError(last_error_msg or "No se pudo generar QR con los endpoints configurados")
             
         except requests.exceptions.Timeout:
             _logger.error(f"[PROVIDER CLIENT] ✗ Timeout contactando proveedor")
