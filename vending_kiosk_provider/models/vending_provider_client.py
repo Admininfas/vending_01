@@ -92,6 +92,7 @@ class VendingProviderClient(models.AbstractModel):
 
         return {
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
             'x-api-key': api_key,
         }
 
@@ -164,13 +165,31 @@ class VendingProviderClient(models.AbstractModel):
             )
             
             _logger.info(f"[PROVIDER CLIENT] Response status: {response.status_code}")
+            _logger.info(
+                "[PROVIDER CLIENT] Response content-type: %s",
+                response.headers.get('Content-Type', ''),
+            )
             
             if response.status_code != 200:
                 error_msg = self._parse_error_response(response)
                 _logger.error(f"[PROVIDER CLIENT] ✗ Error del proveedor: {error_msg}")
                 raise UserError(f"Error del proveedor: {error_msg}")
-            
-            data = response.json()
+
+            raw_body = response.text or ''
+            if not raw_body.strip():
+                _logger.error("[PROVIDER CLIENT] ✗ Respuesta 200 vacía del proveedor")
+                raise UserError("El proveedor devolvió una respuesta vacía al generar QR")
+
+            try:
+                data = response.json()
+            except ValueError:
+                body_preview = raw_body[:300].replace('\n', ' ').replace('\r', ' ')
+                _logger.error(
+                    "[PROVIDER CLIENT] ✗ Respuesta 200 no-JSON. Body preview: %s",
+                    body_preview,
+                )
+                raise UserError("El proveedor devolvió una respuesta no válida al generar QR")
+
             _logger.info(f"[PROVIDER CLIENT] ✓ Response body: {json.dumps(data)[:200]}...")
             
             # Acepta formato real (data_url) y dummy (url)
@@ -200,10 +219,6 @@ class VendingProviderClient(models.AbstractModel):
         except requests.exceptions.RequestException as e:
             _logger.error(f"[PROVIDER CLIENT] ✗ Request error: {e}")
             raise UserError(f"Error al comunicarse con el proveedor: {str(e)}")
-            
-        except json.JSONDecodeError:
-            _logger.error("[PROVIDER CLIENT] ✗ JSON inválido del proveedor")
-            raise UserError("Respuesta inválida del proveedor")
 
     def check_status(self, reference):
         """
