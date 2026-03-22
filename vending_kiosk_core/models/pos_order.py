@@ -1185,4 +1185,16 @@ class PosOrder(models.Model):
             'views': [(False, 'form')],
             'target': 'current',
         }
+
+
+class PosOrderLine(models.Model):
+    """Compatibilidad para vistas que esperan nombre de producto traducido."""
+
+    _inherit = 'pos.order.line'
+
+    translated_product_name = fields.Char(
+        string='Translated Product Name',
+        related='product_id.name',
+        readonly=True,
+    )
     
