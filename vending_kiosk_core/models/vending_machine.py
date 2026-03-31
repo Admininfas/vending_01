@@ -58,6 +58,22 @@ class VendingMachine(models.Model):
         'machine_id',
         string='Slots'
     )
+    is_fault_blocked = fields.Boolean(
+        string='Desactivada por falla',
+        default=False,
+        tracking=True,
+        help='Indica si la máquina está desactivada por una alarma de falla.',
+    )
+    has_fault_blocked_slots = fields.Boolean(
+        string='Tiene slots desactivados por falla',
+        compute='_compute_fault_blocked_slot_stats',
+        store=True,
+    )
+    fault_blocked_slots_count = fields.Integer(
+        string='Slots desactivados por falla',
+        compute='_compute_fault_blocked_slot_stats',
+        store=True,
+    )
     countdown_seconds = fields.Integer(
         string='Tiempo de espera (segundos)',
         default=40,
@@ -138,6 +154,13 @@ class VendingMachine(models.Model):
     def _compute_api_key_configured(self):
         for record in self:
             record.api_key_configured = bool(record.api_key_encrypted)
+
+    @api.depends('slot_ids.is_fault_blocked')
+    def _compute_fault_blocked_slot_stats(self):
+        for record in self:
+            blocked_count = len(record.slot_ids.filtered('is_fault_blocked'))
+            record.fault_blocked_slots_count = blocked_count
+            record.has_fault_blocked_slots = bool(blocked_count)
 
     def _get_api_key_master_secret(self):
         """Obtiene la llave maestra desde parámetros del sistema."""

@@ -32,6 +32,12 @@ patch(ProductListPage.prototype, {
 
         if (this.selfOrder.config._vending_no_machine) {
             this.vendingError = "No hay máquina expendedora configurada para este punto de venta";
+            return;
+        }
+
+        if (this.selfOrder.config._vending_machine_fault_blocked) {
+            this.vendingError = "La máquina expendedora está desactivada por falla.";
+            this.router.navigate("vending-out-of-service");
         }
     },
 
@@ -43,9 +49,24 @@ patch(ProductListPage.prototype, {
             return;
         }
 
-        this.vendingBus = useVendingProductBus(this.selfOrder, (updatedProducts) => {
-            // console.log(`[Vending] Productos actualizados: ${updatedProducts.length} disponibles`);
+        this.vendingBus = useVendingProductBus(this.selfOrder, (snapshot) => {
+            const machineBlocked = Boolean(snapshot?.machineFaultBlocked);
+
+            if (machineBlocked) {
+                this.vendingError = "La máquina expendedora está desactivada por falla.";
+                this.router.navigate("vending-out-of-service");
+                return;
+            }
+
+            this.vendingError = null;
         });
+    },
+
+    _isMachineFaultBlocked() {
+        return Boolean(
+            this.vendingBus?.vendingProducts?.machineFaultBlocked
+            || this.selfOrder?.config?._vending_machine_fault_blocked
+        );
     },
 
     /**
@@ -106,6 +127,10 @@ patch(ProductListPage.prototype, {
         }
 
         if (this.vendingError) {
+            return [];
+        }
+
+        if (this._isMachineFaultBlocked()) {
             return [];
         }
 

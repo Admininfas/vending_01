@@ -6,6 +6,7 @@ import { VendingProcessingScreen } from "./screens/vending_processing_screen/ven
 import { VendingSuccessScreen } from "./screens/vending_success_screen/vending_success_screen";
 import { VendingPaymentSuccessScreen } from "./screens/vending_payment_success_screen/vending_payment_success_screen";
 import { VendingErrorScreen } from "./screens/vending_error_screen/vending_error_screen";
+import { VendingOutOfServiceScreen } from "./screens/vending_out_of_service_screen/vending_out_of_service_screen";
 
 patch(selfOrderIndex, {
     components: {
@@ -14,5 +15,6 @@ patch(selfOrderIndex, {
         VendingSuccessScreen,
         VendingPaymentSuccessScreen,
         VendingErrorScreen,
+        VendingOutOfServiceScreen,
     },
 });

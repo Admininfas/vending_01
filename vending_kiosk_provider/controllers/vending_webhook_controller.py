@@ -7,6 +7,7 @@ Implementa 2 endpoints públicos HTTP (type='http'):
 - POST /v1/vending/webhook/payment_status: Estado de pago
 - POST /v1/vending/webhook/delivery_status: Estado de entrega
 - POST /v1/vending/webhook/load: Información de carga de stock
+- POST /v1/vending/webhook/alarm: Bloqueo/desbloqueo por falla
 
 Seguridad:
 - Requiere API key por máquina en header x-api-key.
@@ -52,6 +53,8 @@ class VendingWebhookController(http.Controller):
         'REFUNDED',
     }
     DELIVERY_STATUS_VALUES = {'SUCCESS', 'ERROR'}
+    ALARM_STATUS_VALUES = {'FAIL', 'SUCCESS'}
+    ALARM_SCOPE_VALUES = {'MACHINE', 'SLOT'}
 
     # ------------------------------------------------------------------
     # Endpoints públicos
@@ -73,6 +76,15 @@ class VendingWebhookController(http.Controller):
         _logger.info(f"{LOG_SEP}")
         _logger.info('[WEBHOOK DELIVERY] POST /v1/vending/webhook/delivery_status recibido')
         return self._process_delivery_status_webhook(request)
+
+    @http.route(
+        '/v1/vending/webhook/alarm',
+        type='http', auth='public', methods=['POST'], csrf=False,
+    )
+    def webhook_alarm(self, **kwargs):
+        _logger.info(f"{LOG_SEP}")
+        _logger.info('[WEBHOOK ALARM] POST /v1/vending/webhook/alarm recibido')
+        return self._process_alarm_webhook(request)
 
 
     @http.route(
@@ -104,6 +116,15 @@ class VendingWebhookController(http.Controller):
     # ------------------------------------------------------------------
     # Procesamiento de webhooks
     # ------------------------------------------------------------------
+    @staticmethod
+    def _make_json_response(payload, status_code=200):
+        body = json.dumps(payload, ensure_ascii=False, default=str)
+        return request.make_response(
+            body,
+            headers=[('Content-Type', 'application/json')],
+            status=status_code,
+        )
+
     def _extract_api_key(self, request_obj):
         """Obtiene x-api-key contemplando case-insensitive en header name."""
         headers = request_obj.httprequest.headers
@@ -313,6 +334,163 @@ class VendingWebhookController(http.Controller):
             self._log_webhook(reference, raw_body, 'delivery_status',
                               error_msg=f'Internal error: {str(error)}',
                               processing_result='internal_error')
+            _logger.info(f"{LOG_SEP}")
+            return self._make_response('Internal server error', 500)
+
+    def _process_alarm_webhook(self, request_obj):
+        """Procesa webhook de alarmas de máquina/slots con validación de API key."""
+        raw_body, data, response_error = self._parse_request_json(request_obj, 'alarm')
+        if response_error:
+            return response_error
+
+        machine_code = str(data.get('machine', '') or '').strip()
+        scope = str(data.get('scope', '') or '').upper().strip()
+        status = str(data.get('status', '') or '').upper().strip()
+        raw_slots = data.get('slots', [])
+
+        if not machine_code or scope not in self.ALARM_SCOPE_VALUES or status not in self.ALARM_STATUS_VALUES:
+            self._log_webhook(
+                machine_code,
+                raw_body,
+                'alarm',
+                error_msg='Invalid payload: machine, scope(MACHINE|SLOT), status(FAIL|SUCCESS) are required',
+                processing_result='validation_error',
+            )
+            return self._make_response(
+                'Invalid payload: machine, scope(MACHINE|SLOT), status(FAIL|SUCCESS) are required',
+                400,
+            )
+
+        env = request_obj.env
+        machine = env['vending.machine'].sudo().search([('code', '=', machine_code)], limit=1)
+        if not machine:
+            self._log_webhook(
+                machine_code,
+                raw_body,
+                'alarm',
+                error_msg=f'Machine {machine_code} not found',
+                processing_result='validation_error',
+            )
+            return self._make_response(f'Machine {machine_code} not found', 404)
+
+        auth_error = self._authenticate_machine(machine, request_obj, machine_code, raw_body, 'alarm')
+        if auth_error:
+            return auth_error
+
+        try:
+            actions = {
+                'machine': machine_code,
+                'scope': scope,
+                'status': status,
+                'machine_was_fault_blocked': bool(machine.is_fault_blocked),
+            }
+
+            should_notify = False
+            invalid_slot_values = []
+            missing_slots = []
+            processed_slot_codes = []
+
+            if scope == 'MACHINE':
+                machine_blocked = status == 'FAIL'
+                machine.sudo().write({'is_fault_blocked': machine_blocked})
+                machine.slot_ids.sudo().write({'is_fault_blocked': machine_blocked})
+                processed_slot_codes = machine.slot_ids.mapped('code')
+                should_notify = True
+                processing_result = 'processed'
+            else:
+                if not isinstance(raw_slots, list) or not raw_slots:
+                    self._log_webhook(
+                        machine_code,
+                        raw_body,
+                        'alarm',
+                        error_msg='slots is required for scope SLOT and must be a non-empty array',
+                        processing_result='validation_error',
+                    )
+                    return self._make_response(
+                        'slots is required for scope SLOT and must be a non-empty array',
+                        400,
+                    )
+
+                requested_slot_codes = []
+                seen_codes = set()
+                for raw_slot in raw_slots:
+                    try:
+                        slot_code = int(raw_slot)
+                    except (TypeError, ValueError):
+                        invalid_slot_values.append(raw_slot)
+                        continue
+
+                    if slot_code in seen_codes:
+                        continue
+                    seen_codes.add(slot_code)
+                    requested_slot_codes.append(slot_code)
+
+                valid_slots = env['vending.slot'].sudo().browse()
+                if requested_slot_codes:
+                    valid_slots = env['vending.slot'].sudo().search([
+                        ('machine_id', '=', machine.id),
+                        ('code', 'in', requested_slot_codes),
+                    ])
+
+                found_codes = set(valid_slots.mapped('code'))
+                missing_slots = [code for code in requested_slot_codes if code not in found_codes]
+                processed_slot_codes = sorted(found_codes)
+
+                if valid_slots:
+                    slot_blocked = status == 'FAIL'
+                    valid_slots.sudo().write({'is_fault_blocked': slot_blocked})
+                    should_notify = True
+
+                if status == 'SUCCESS' and processed_slot_codes and machine.is_fault_blocked:
+                    machine.sudo().write({'is_fault_blocked': False})
+                    should_notify = True
+
+                processing_result = 'processed'
+                if invalid_slot_values or missing_slots:
+                    processing_result = 'partial'
+
+            if should_notify:
+                env['stock.quant'].sudo()._notify_vending_changes_for_machines(machine)
+
+            actions.update({
+                'processed_slot_codes': processed_slot_codes,
+                'invalid_slot_values': invalid_slot_values,
+                'missing_slots': missing_slots,
+                'machine_is_fault_blocked': bool(machine.is_fault_blocked),
+                'machine_fault_blocked_slots_count': machine.fault_blocked_slots_count,
+            })
+
+            self._log_webhook(
+                machine_code,
+                raw_body,
+                'alarm',
+                processing_result=processing_result,
+                actions=actions,
+            )
+
+            response_payload = {
+                'status': 'ok' if processing_result == 'processed' else 'partial',
+                'machine': machine_code,
+                'scope': scope,
+                'result': processing_result,
+                'machine_is_fault_blocked': bool(machine.is_fault_blocked),
+                'machine_fault_blocked_slots_count': machine.fault_blocked_slots_count,
+                'processed_slot_codes': processed_slot_codes,
+                'missing_slots': missing_slots,
+                'invalid_slot_values': invalid_slot_values,
+            }
+            _logger.info(f"{LOG_SEP}")
+            return self._make_json_response(response_payload, 200)
+
+        except Exception as error:
+            _logger.exception('[WEBHOOK ALARM] Error interno procesando')
+            self._log_webhook(
+                machine_code,
+                raw_body,
+                'alarm',
+                error_msg=f'Internal error: {str(error)}',
+                processing_result='internal_error',
+            )
             _logger.info(f"{LOG_SEP}")
             return self._make_response('Internal server error', 500)
 

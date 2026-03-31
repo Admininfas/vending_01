@@ -8,7 +8,7 @@
         <field name="arch" type="xml">
             <list string="Webhook Logs" create="false" edit="false"
                   decoration-success="processing_result == 'processed'"
-                  decoration-warning="processing_result in ('duplicate', 'late_arrival', 'order_not_found')"
+                  decoration-warning="processing_result in ('duplicate', 'late_arrival', 'order_not_found', 'partial')"
                 decoration-danger="processing_result in ('internal_error', 'validation_error', 'auth_error')">
                 <field name="create_date" string="Fecha/Hora"/>
                 <field name="endpoint" string="Endpoint"/>

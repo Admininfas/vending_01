@@ -32,6 +32,9 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
         productSlots: Object.assign({}, selfOrder?.config?._vending_product_slots || {}),
         productMinSlotCode: Object.assign({}, selfOrder?.config?._vending_product_min_slot_code || {}),
         productMeta: {},
+        machineFaultBlocked: Boolean(selfOrder?.config?._vending_machine_fault_blocked),
+        machineHasFaultBlockedSlots: Boolean(selfOrder?.config?._vending_machine_has_fault_blocked_slots),
+        machineFaultBlockedSlotsCount: Number(selfOrder?.config?._vending_machine_fault_blocked_slots_count || 0),
     });
 
     let busChannel = null;
@@ -196,7 +199,7 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
         }
     }
 
-    function updateProducts(newIds, newSlots, newProductMinSlotCode, newProductMeta) {
+    function updateProducts(newIds, newSlots, newProductMinSlotCode, newProductMeta, machineState = null) {
         vendingProducts.availableIds.splice(0, vendingProducts.availableIds.length, ...newIds);
         if (newSlots) {
             for (const key of Object.keys(vendingProducts.productSlots)) {
@@ -213,8 +216,22 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
         if (newProductMeta) {
             applyProductMeta(newProductMeta);
         }
+        if (machineState && typeof machineState === "object") {
+            vendingProducts.machineFaultBlocked = Boolean(machineState.machineFaultBlocked);
+            vendingProducts.machineHasFaultBlockedSlots = Boolean(machineState.machineHasFaultBlockedSlots);
+            vendingProducts.machineFaultBlockedSlotsCount = Number(
+                machineState.machineFaultBlockedSlotsCount || 0
+            );
+        }
+
+        const snapshot = {
+            availableIds: [...vendingProducts.availableIds],
+            machineFaultBlocked: Boolean(vendingProducts.machineFaultBlocked),
+            machineHasFaultBlockedSlots: Boolean(vendingProducts.machineHasFaultBlockedSlots),
+            machineFaultBlockedSlotsCount: Number(vendingProducts.machineFaultBlockedSlotsCount || 0),
+        };
         if (typeof onProductsUpdated === 'function') {
-            onProductsUpdated(newIds);
+            onProductsUpdated(snapshot);
         }
     }
 
@@ -239,7 +256,11 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
             //     `[Vending Bus] Actualización recibida: ${msg.machine_name || 'Máquina'} ` +
             //     `(${(msg.all_available_ids || []).length} productos)`
             // );
-            updateProducts(msg.all_available_ids || [], null, null);
+            updateProducts(msg.all_available_ids || [], null, null, null, {
+                machineFaultBlocked: msg.machine_fault_blocked,
+                machineHasFaultBlockedSlots: msg.machine_has_fault_blocked_slots,
+                machineFaultBlockedSlotsCount: msg.machine_fault_blocked_slots_count,
+            });
 
             // El bus avisa rápido; hacemos poll inmediato para traer metadata fresca.
             pollNow();
@@ -277,6 +298,11 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
                 resp.product_slots || null,
                 resp.product_min_slot_code || null,
                 resp.product_meta || null,
+                {
+                    machineFaultBlocked: resp.machine_fault_blocked,
+                    machineHasFaultBlockedSlots: resp.machine_has_fault_blocked_slots,
+                    machineFaultBlockedSlotsCount: resp.machine_fault_blocked_slots_count,
+                },
             );
         } catch (err) {
             // console.warn("[Vending Poll] Error de red:", err);

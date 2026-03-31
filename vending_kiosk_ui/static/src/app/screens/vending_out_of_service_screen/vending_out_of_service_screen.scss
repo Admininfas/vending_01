@@ -1,0 +1,25 @@
+.o_self_vending_oos {
+    background: radial-gradient(circle at 20% 20%, #f8d7da, #f4f6f8 55%, #eceff1);
+}
+
+.o_self_vending_oos_card {
+    max-width: 640px;
+    border-radius: 20px;
+    border: 1px solid rgba(176, 0, 32, 0.2);
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 20px 45px rgba(176, 0, 32, 0.15);
+}
+
+.o_self_vending_oos_icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto;
+    border-radius: 50%;
+    background: #b00020;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 700;
+}

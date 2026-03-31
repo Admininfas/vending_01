@@ -28,6 +28,7 @@ class VendingWebhookLog(models.Model):
         ('payment_status', 'Payment Status Webhook'),
         ('delivery_status', 'Delivery Status Webhook'),
         ('load', 'Load Webhook'),
+        ('alarm', 'Alarm Webhook'),
     ], string='Endpoint', required=True, index=True, help='Tipo de webhook recibido')
     
     http_method = fields.Char(
@@ -81,6 +82,7 @@ class VendingWebhookLog(models.Model):
     # ── Auditoría liviana ──
     processing_result = fields.Selection([
         ('processed', 'Procesado'),
+        ('partial', 'Procesado parcial'),
         ('duplicate', 'Duplicado'),
         ('late_arrival', 'Extemporáneo'),
         ('order_not_found', 'Orden no encontrada'),
