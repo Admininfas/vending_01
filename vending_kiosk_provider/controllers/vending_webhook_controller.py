@@ -157,6 +157,45 @@ class VendingWebhookController(http.Controller):
             return self._make_response('Unauthorized', 401)
         return None
 
+    def _deduce_slot_from_last_transaction(self, machine, env):
+        """
+        Deduce el número de slot de la última transacción de vending en la máquina.
+        
+        Busca la orden de vending más reciente y retorna su slot_code.
+        Si no hay transacciones previas, retorna None.
+        
+        Args:
+            machine: vending.machine record
+            env: Environment
+            
+        Returns:
+            int: slot_code de la última transacción, o None si no existe
+        """
+        try:
+            last_order = env['pos.order'].sudo().search([
+                ('vending_machine_id', '=', machine.id),
+                ('vending_slot_id', '!=', False),
+            ], order='create_date desc', limit=1)
+            
+            if last_order and last_order.vending_slot_id:
+                slot_code = last_order.vending_slot_id.code
+                _logger.info(
+                    f"[WEBHOOK ALARM] Slot deducido de última transacción: "
+                    f"slot_code={slot_code}, order_id={last_order.id}"
+                )
+                return slot_code
+            
+            _logger.warning(
+                f"[WEBHOOK ALARM] No hay transacciones previas para máquina {machine.code}, "
+                f"no se puede deducir slot"
+            )
+            return None
+        except Exception as e:
+            _logger.warning(
+                f"[WEBHOOK ALARM] Error deduciendo slot de última transacción: {e}"
+            )
+            return None
+
     def _parse_request_json(self, request_obj, endpoint_type):
         """Lee body + parsea JSON. Retorna (raw_body, data, response_error)."""
         # ── Lectura del body ──
@@ -399,16 +438,27 @@ class VendingWebhookController(http.Controller):
                 processing_result = 'processed'
             else:
                 if not isinstance(raw_slots, list) or not raw_slots:
-                    self._log_webhook(
-                        machine_code,
-                        raw_body,
-                        'alarm',
-                        error_msg='slots is required for scope SLOT and must be a non-empty array',
-                        processing_result='validation_error',
-                    )
-                    return self._make_response(
-                        'slots is required for scope SLOT and must be a non-empty array',
-                        400,
+                    # Si no viene array de slots, intentar deducir de la última transacción
+                    deduced_slot_code = self._deduce_slot_from_last_transaction(machine, env)
+                    
+                    if deduced_slot_code is None:
+                        self._log_webhook(
+                            machine_code,
+                            raw_body,
+                            'alarm',
+                            error_msg='slots is required for scope SLOT when machine has no previous transactions',
+                            processing_result='validation_error',
+                        )
+                        return self._make_response(
+                            'slots is required for scope SLOT and must be a non-empty array',
+                            400,
+                        )
+                    
+                    # Usar el slot deducido
+                    raw_slots = [deduced_slot_code]
+                    _logger.info(
+                        f"[WEBHOOK ALARM] Usando slot deducido: {deduced_slot_code} "
+                        f"(no se recibió array de slots en payload)"
                     )
 
                 requested_slot_codes = []
