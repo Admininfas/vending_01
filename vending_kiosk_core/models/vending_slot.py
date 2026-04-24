@@ -63,12 +63,6 @@ class VendingSlot(models.Model):
         tracking=True,
         help='Si el slot está activo y puede dispensar'
     )
-    is_fault_blocked = fields.Boolean(
-        string='Desactivado por falla',
-        default=False,
-        tracking=True,
-        help='Indica si el slot está desactivado por una alarma de falla.',
-    )
     
     # Campos computados usando stock real
     current_stock = fields.Float(
@@ -85,7 +79,6 @@ class VendingSlot(models.Model):
         'product_tmpl_id',
         'location_id',
         'is_active',
-        'is_fault_blocked',
     }
 
     def _notify_vending_slot_catalog_changes(self, machines=None, reason='slot_update'):

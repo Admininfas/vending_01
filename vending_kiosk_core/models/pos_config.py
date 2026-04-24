@@ -34,13 +34,9 @@ class PosConfig(models.Model):
         if not self.vending_machine_id:
             return empty_result
 
-        if self.vending_machine_id.is_fault_blocked:
-            return empty_result
-
         all_slots = self.env['vending.slot'].search([
             ('machine_id', '=', self.vending_machine_id.id),
             ('is_active', '=', True),
-            ('is_fault_blocked', '=', False),
             ('location_id', '!=', False),
         ], order='code, id')
 
@@ -116,21 +112,6 @@ class PosConfig(models.Model):
         readonly=True,
         help='Diario donde se crearán las facturas de vending'
     )
-    vending_machine_fault_blocked = fields.Boolean(
-        string='Máquina desactivada por falla',
-        related='vending_machine_id.is_fault_blocked',
-        readonly=True,
-    )
-    vending_machine_has_fault_blocked_slots = fields.Boolean(
-        string='Tiene slots desactivados por falla',
-        related='vending_machine_id.has_fault_blocked_slots',
-        readonly=True,
-    )
-    vending_machine_fault_blocked_slots_count = fields.Integer(
-        string='Cantidad de slots desactivados por falla',
-        related='vending_machine_id.fault_blocked_slots_count',
-        readonly=True,
-    )
 
     def write(self, vals):
         """Sincronizar relación bidireccional POS-Vending al escribir."""
@@ -182,15 +163,11 @@ class PosConfig(models.Model):
         
         if not self.vending_machine_id:
             return self.env['vending.slot'].browse()
-
-        if self.vending_machine_id.is_fault_blocked:
-            return self.env['vending.slot'].browse()
         
         slots = self.env['vending.slot'].search([
             ('machine_id', '=', self.vending_machine_id.id),
             ('product_tmpl_id', '=', product_tmpl_id),
             ('is_active', '=', True),
-            ('is_fault_blocked', '=', False),
             ('location_id', '!=', False),
             ('current_stock', '>', 0),
         ], order='current_stock desc', limit=1)
@@ -206,15 +183,11 @@ class PosConfig(models.Model):
         
         if not self.vending_machine_id:
             return []
-
-        if self.vending_machine_id.is_fault_blocked:
-            return []
         
         slots = self.env['vending.slot'].search([
             ('machine_id', '=', self.vending_machine_id.id),
             ('product_tmpl_id', '=', product_tmpl_id),
             ('is_active', '=', True),
-            ('is_fault_blocked', '=', False),
             ('location_id', '!=', False),
             ('current_stock', '>', 0),
         ], order='code')
@@ -270,15 +243,11 @@ class PosConfig(models.Model):
             else:
                 # Obtener catálogo vending ordenado por menor slot.
                 catalog_data = config.get_vending_catalog_data()
-                machine = config.vending_machine_id
                 records[0]['_vending_available_products'] = catalog_data['product_ids']
                 product_slots = catalog_data['product_slots']
                 records[0]['_vending_product_slots'] = product_slots
                 records[0]['_vending_product_min_slot_code'] = catalog_data['product_min_slot_code']
                 records[0]['_vending_machine_id'] = config.vending_machine_id.id
-                records[0]['_vending_machine_fault_blocked'] = bool(machine.is_fault_blocked)
-                records[0]['_vending_machine_has_fault_blocked_slots'] = bool(machine.has_fault_blocked_slots)
-                records[0]['_vending_machine_fault_blocked_slots_count'] = machine.fault_blocked_slots_count or 0
                 records[0]['vending_countdown_seconds'] = config.vending_countdown_seconds or 40
                 records[0]['vending_qr_timeout_seconds'] = config.vending_qr_timeout_seconds or 120
                 _logger.info("[Vending] Enviando al frontend _vending_available_products: %s", 

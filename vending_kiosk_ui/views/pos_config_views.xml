@@ -21,9 +21,6 @@
                 <!-- Campos invisibles necesarios para la lógica de los botones -->
                 <field name="self_ordering_mode" invisible="1" />
                 <field name="current_session_id" invisible="1" />
-                <field name="vending_machine_fault_blocked" invisible="1" />
-                <field name="vending_machine_has_fault_blocked_slots" invisible="1" />
-                <field name="vending_machine_fault_blocked_slots_count" invisible="1" />
                 <!-- Contenedor de botones vending -->
                 <div class="col-6 d-flex flex-wrap align-items-center gap-2"
                     invisible="not self_ordering_mode == 'vending'">

@@ -5,13 +5,13 @@
         <field name="name">vending.slot.list</field>
         <field name="model">vending.slot</field>
         <field name="arch" type="xml">
-            <list string="Slots de Expendedora" decoration-danger="is_fault_blocked">
+            <list string="Slots de Expendedora">
                 <field name="machine_id"/>
                 <field name="name"/>
                 <field name="code"/>
                 <field name="product_tmpl_id"/>
                 <field name="current_stock" string="Stock"/>
-                <field name="is_fault_blocked"/>
+                <field name="is_active"/>
                 <field name="location_id" domain="[('usage', '=', 'internal')]"/>
             </list>
         </field>
@@ -23,10 +23,6 @@
         <field name="model">vending.slot</field>
         <field name="arch" type="xml">
             <form string="Slot de Expendedora">
-                <field name="is_fault_blocked" invisible="1"/>
-                <div class="alert alert-danger" role="alert" invisible="not is_fault_blocked">
-                    <strong>Slot desactivado por falla.</strong>
-                </div>
                 <sheet>
                     <group>
                         <group>
@@ -36,7 +32,7 @@
                             <field name="product_tmpl_id"/>
                         </group>
                         <group>
-                            <field name="is_fault_blocked" readonly="1"/>
+                            <field name="is_active"/>
                             <field name="location_id" domain="[('usage', '=', 'internal')]"/>
                         </group>
                     </group>

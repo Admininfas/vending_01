@@ -777,14 +777,6 @@ class PosOrder(models.Model):
             
         machine = self.vending_machine_id
         _logger.debug(f"Máquina asociada: {machine.name}")
-
-        if machine.is_fault_blocked:
-            _logger.error(f"Máquina {machine.name} desactivada por falla")
-            self._register_internal_error(
-                'MACHINE_FAULT_BLOCKED',
-                f'Máquina "{machine.name}" desactivada por falla'
-            )
-            return False
         
         if not machine.payment_method_id:
             _logger.error(f"Máquina {machine.name} no tiene método de pago configurado")
@@ -931,14 +923,6 @@ class PosOrder(models.Model):
             
         slot = self.vending_slot_id
         _logger.debug(f"Slot asociado: {slot.name}")
-
-        if slot.is_fault_blocked:
-            _logger.error(f"Slot {slot.name} desactivado por falla")
-            self._register_internal_error(
-                'SLOT_FAULT_BLOCKED',
-                f'Slot "{slot.name}" desactivado por falla'
-            )
-            return False
         
         if not slot.location_id:
             _logger.error(f"Slot {slot.name} no tiene ubicación de stock configurada")

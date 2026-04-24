@@ -14,9 +14,6 @@
             <t t-set-slot="vending-error" route="`/pos-self/${selfOrder.config.id}/vending-error`">
                 <VendingErrorScreen product="selfOrder.selectedVendingProduct" error="selfOrder.vendingErrorMessage" errorTitle="selfOrder.vendingErrorTitle"/>
             </t>
-            <t t-set-slot="vending-out-of-service" route="`/pos-self/${selfOrder.config.id}/vending-out-of-service`">
-                <VendingOutOfServiceScreen/>
-            </t>
         </xpath>
     </t>
 </templates>

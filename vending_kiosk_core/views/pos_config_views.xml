@@ -7,18 +7,6 @@
         <field name="inherit_id" ref="point_of_sale.pos_config_view_form"/>
         <field name="arch" type="xml">
             <xpath expr="//div[@groups='base.group_system']" position="before">
-                <field name="vending_machine_fault_blocked" invisible="1"/>
-                <field name="vending_machine_has_fault_blocked_slots" invisible="1"/>
-                <field name="vending_machine_fault_blocked_slots_count" invisible="1"/>
-                <div class="alert alert-danger" role="alert"
-                     invisible="self_ordering_mode != 'vending' or not vending_machine_id or not vending_machine_fault_blocked">
-                    <strong>Maquina desactivada por falla.</strong>
-                </div>
-                <div class="alert alert-warning" role="alert"
-                     invisible="self_ordering_mode != 'vending' or not vending_machine_id or vending_machine_fault_blocked or not vending_machine_has_fault_blocked_slots">
-                    <strong>Tiene slots desactivados por falla.</strong>
-                    Cantidad: <field name="vending_machine_fault_blocked_slots_count" class="oe_inline"/>
-                </div>
                 <separator string="Configuración de Máquina Expendedora" name="vending_machine_separator"/>
                 <setting string="Máquina Expendedora" name="vending_machine_setting" help="Selecciona una máquina expendedora desde 'Punto de venta > Configuración > Expendedoras > Máquinas'">
                     <field name="vending_machine_id" placeholder="Selecciona o crea una máquina..." readonly="1"/>
@@ -48,17 +36,6 @@
             <!-- Load vending_machine_id field into the kanban -->
             <xpath expr="//field[@name='statistics_for_current_session']" position="after">
                 <field name="vending_machine_id"/>
-                <field name="vending_machine_fault_blocked"/>
-                <field name="vending_machine_has_fault_blocked_slots"/>
-                <field name="vending_machine_fault_blocked_slots_count"/>
-            </xpath>
-            <xpath expr="//div[@name='card_title']" position="inside">
-                <div t-if="record.vending_machine_fault_blocked.raw_value" class="text-danger fw-bold mt-1">
-                    Maquina desactivada por falla.
-                </div>
-                <div t-elif="record.vending_machine_has_fault_blocked_slots.raw_value" class="text-warning fw-bold mt-1">
-                    Tiene slots desactivados por falla.
-                </div>
             </xpath>
             <!-- Exclude vending machines from the "To Close" warning (4th div inside card_title) -->
             <!-- <xpath expr="//div[@name='card_title']/div[4]" position="attributes">

@@ -270,12 +270,6 @@ class VendingQrController(http.Controller):
         if not machine:
             return {'error': 'La máquina expendedora no está configurada correctamente. Contacte al administrador.'}
 
-        if machine.is_fault_blocked:
-            return {
-                'error': 'La máquina expendedora está desactivada por falla.',
-                'error_code': 'MACHINE_DISABLED',
-            }
-
         # Validar que el POS tenga sesión activa
         if not pos_config.current_session_id:
             _logger.error(f"[QR CREATE] POS config {pos_config.id} no tiene sesión activa")
@@ -295,13 +289,6 @@ class VendingQrController(http.Controller):
             return {'error': f'El producto "{product_tmpl.display_name}" no está disponible en esta máquina. Por favor, seleccione otro producto.'}
         
         _logger.info(f"[QR CREATE] ✓ Mejor slot encontrado: {slot.code}, stock={slot.current_stock}, is_active={slot.is_active}")
-
-        if slot.is_fault_blocked:
-            _logger.error(f"[QR CREATE] ✗ Slot bloqueado por falla: slot={slot.code}")
-            return {
-                'error': f'El slot "{slot.name}" está desactivado por falla. Por favor, seleccione otro producto.',
-                'error_code': 'SLOT_DISABLED',
-            }
 
         # Verificar que el slot tenga stock disponible
         if not slot.current_stock or not slot.is_active:
@@ -470,10 +457,6 @@ class VendingQrController(http.Controller):
         product_ids = catalog_data['product_ids']
         product_slots = catalog_data['product_slots']
         product_min_slot_code = catalog_data['product_min_slot_code']
-        machine = config.vending_machine_id
-        machine_fault_blocked = bool(machine.is_fault_blocked)
-        machine_has_fault_blocked_slots = bool(machine.has_fault_blocked_slots)
-        machine_fault_blocked_slots_count = machine.fault_blocked_slots_count or 0
         product_meta = self._build_product_meta_for_poll(
             config,
             product_ids,
@@ -498,7 +481,7 @@ class VendingQrController(http.Controller):
                 value.get('min_slot_code') or 0,
             )
             for key, value in product_meta.items()
-        )) + str((machine_fault_blocked, machine_has_fault_blocked_slots, machine_fault_blocked_slots_count))
+        ))
         server_hash = hashlib.md5(raw.encode()).hexdigest()
 
         if server_hash == client_hash:
@@ -509,9 +492,6 @@ class VendingQrController(http.Controller):
                 'product_slots': None,
                 'product_min_slot_code': None,
                 'product_meta': None,
-                'machine_fault_blocked': machine_fault_blocked,
-                'machine_has_fault_blocked_slots': machine_has_fault_blocked_slots,
-                'machine_fault_blocked_slots_count': machine_fault_blocked_slots_count,
             }
 
         return {
@@ -521,7 +501,4 @@ class VendingQrController(http.Controller):
             'product_slots': product_slots,
             'product_min_slot_code': product_min_slot_code,
             'product_meta': product_meta,
-            'machine_fault_blocked': machine_fault_blocked,
-            'machine_has_fault_blocked_slots': machine_has_fault_blocked_slots,
-            'machine_fault_blocked_slots_count': machine_fault_blocked_slots_count,
         }

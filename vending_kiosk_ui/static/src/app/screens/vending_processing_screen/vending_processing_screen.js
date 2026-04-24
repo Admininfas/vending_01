@@ -125,10 +125,6 @@ export class VendingProcessingScreen extends Component {
             const response = await this._requestQrFromBackend(productTemplate);
             
             if (!response || response.error) {
-                if (response?.error_code === 'MACHINE_DISABLED') {
-                    this.router.navigate("vending-out-of-service");
-                    return;
-                }
                 this._handleQrError(response?.error);
                 return;
             }
