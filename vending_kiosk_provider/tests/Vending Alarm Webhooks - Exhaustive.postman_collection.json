@@ -1,0 +1,379 @@
+{
+  "info": {
+    "_postman_id": "f7e2c1a1-3d3c-46d7-8a23-2d702f3df92b",
+    "name": "Vending Alarm Webhooks - Exhaustive",
+    "description": "Exhaustive tests for /v1/vending/webhook/alarm with x-api-key per machine, including validation, auth, partial slot processing, idempotency, and mixed fail/success sequences.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 - Auth and Validation",
+      "item": [
+        {
+          "name": "Alarm - Missing API key (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Odoo-Database", "value": "{{db_name}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": \"{{machine_code}}\",\n  \"scope\": \"MACHINE\",\n  \"status\": \"FAIL\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/vending/webhook/alarm",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "alarm"]
+            }
+          }
+        },
+        {
+          "name": "Alarm - Invalid API key (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Odoo-Database", "value": "{{db_name}}" },
+              { "key": "x-api-key", "value": "{{bad_api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": \"{{machine_code}}\",\n  \"scope\": \"MACHINE\",\n  \"status\": \"FAIL\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/vending/webhook/alarm",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "alarm"]
+            }
+          }
+        },
+        {
+          "name": "Alarm - Missing scope (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Odoo-Database", "value": "{{db_name}}" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": \"{{machine_code}}\",\n  \"status\": \"FAIL\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/vending/webhook/alarm",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "alarm"]
+            }
+          }
+        },
+        {
+          "name": "Alarm - Invalid status (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Odoo-Database", "value": "{{db_name}}" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": \"{{machine_code}}\",\n  \"scope\": \"MACHINE\",\n  \"status\": \"BROKEN\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/vending/webhook/alarm",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "alarm"]
+            }
+          }
+        },
+        {
+          "name": "Alarm - SLOT empty array (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Odoo-Database", "value": "{{db_name}}" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": \"{{machine_code}}\",\n  \"scope\": \"SLOT\",\n  \"status\": \"FAIL\",\n  \"slots\": []\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/vending/webhook/alarm",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "alarm"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 - MACHINE scope",
+      "item": [
+        {
+          "name": "MACHINE FAIL - Full lock",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Odoo-Database", "value": "{{db_name}}" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": \"{{machine_code}}\",\n  \"scope\": \"MACHINE\",\n  \"status\": \"FAIL\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/vending/webhook/alarm",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "alarm"]
+            }
+          }
+        },
+        {
+          "name": "MACHINE FAIL again - Idempotency",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Odoo-Database", "value": "{{db_name}}" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": \"{{machine_code}}\",\n  \"scope\": \"MACHINE\",\n  \"status\": \"FAIL\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/vending/webhook/alarm",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "alarm"]
+            }
+          }
+        },
+        {
+          "name": "MACHINE SUCCESS - Full unlock",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Odoo-Database", "value": "{{db_name}}" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": \"{{machine_code}}\",\n  \"scope\": \"MACHINE\",\n  \"status\": \"SUCCESS\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/vending/webhook/alarm",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "alarm"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - SLOT scope",
+      "item": [
+        {
+          "name": "SLOT FAIL - Single slot",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Odoo-Database", "value": "{{db_name}}" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": \"{{machine_code}}\",\n  \"scope\": \"SLOT\",\n  \"status\": \"FAIL\",\n  \"slots\": [{{slot_a}}]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/vending/webhook/alarm",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "alarm"]
+            }
+          }
+        },
+        {
+          "name": "SLOT FAIL - Multiple slots",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Odoo-Database", "value": "{{db_name}}" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": \"{{machine_code}}\",\n  \"scope\": \"SLOT\",\n  \"status\": \"FAIL\",\n  \"slots\": [{{slot_a}}, {{slot_b}}]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/vending/webhook/alarm",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "alarm"]
+            }
+          }
+        },
+        {
+          "name": "SLOT SUCCESS - Single slot",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Odoo-Database", "value": "{{db_name}}" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": \"{{machine_code}}\",\n  \"scope\": \"SLOT\",\n  \"status\": \"SUCCESS\",\n  \"slots\": [{{slot_a}}]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/vending/webhook/alarm",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "alarm"]
+            }
+          }
+        },
+        {
+          "name": "SLOT SUCCESS - Partial (existing + missing)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Odoo-Database", "value": "{{db_name}}" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": \"{{machine_code}}\",\n  \"scope\": \"SLOT\",\n  \"status\": \"SUCCESS\",\n  \"slots\": [{{slot_a}}, {{slot_missing}}]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/vending/webhook/alarm",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "alarm"]
+            }
+          }
+        },
+        {
+          "name": "SLOT FAIL - Partial (invalid type + valid)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Odoo-Database", "value": "{{db_name}}" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": \"{{machine_code}}\",\n  \"scope\": \"SLOT\",\n  \"status\": \"FAIL\",\n  \"slots\": [\"abc\", {{slot_b}}]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/vending/webhook/alarm",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "alarm"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Mixed Sequences",
+      "item": [
+        {
+          "name": "Seq A1 - MACHINE FAIL",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Odoo-Database", "value": "{{db_name}}" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": \"{{machine_code}}\",\n  \"scope\": \"MACHINE\",\n  \"status\": \"FAIL\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/vending/webhook/alarm",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "alarm"]
+            }
+          }
+        },
+        {
+          "name": "Seq A2 - SLOT SUCCESS (unlock only listed slots + machine)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Odoo-Database", "value": "{{db_name}}" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": \"{{machine_code}}\",\n  \"scope\": \"SLOT\",\n  \"status\": \"SUCCESS\",\n  \"slots\": [{{slot_a}}]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/vending/webhook/alarm",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "alarm"]
+            }
+          }
+        },
+        {
+          "name": "Seq A3 - SLOT SUCCESS (unlock another slot)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Odoo-Database", "value": "{{db_name}}" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": \"{{machine_code}}\",\n  \"scope\": \"SLOT\",\n  \"status\": \"SUCCESS\",\n  \"slots\": [{{slot_b}}]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/vending/webhook/alarm",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "alarm"]
+            }
+          }
+        },
+        {
+          "name": "Seq A4 - MACHINE SUCCESS (full recovery)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Odoo-Database", "value": "{{db_name}}" },
+              { "key": "x-api-key", "value": "{{api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"machine\": \"{{machine_code}}\",\n  \"scope\": \"MACHINE\",\n  \"status\": \"SUCCESS\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/vending/webhook/alarm",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "vending", "webhook", "alarm"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8087" },
+    { "key": "db_name", "value": "Testing_LOCAL2" },
+    { "key": "api_key", "value": "replace-with-machine-api-key" },
+    { "key": "bad_api_key", "value": "invalid-key" },
+    { "key": "machine_code", "value": "replace-with-machine-code" },
+    { "key": "slot_a", "value": "10" },
+    { "key": "slot_b", "value": "12" },
+    { "key": "slot_missing", "value": "9999" }
+  ]
+}

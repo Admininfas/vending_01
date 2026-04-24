@@ -5,11 +5,15 @@
         <field name="name">vending.machine.list</field>
         <field name="model">vending.machine</field>
         <field name="arch" type="xml">
-            <list string="Máquinas Expendedoras">
+            <list string="Máquinas Expendedoras"
+                  decoration-danger="is_fault_blocked"
+                  decoration-warning="has_fault_blocked_slots and not is_fault_blocked">
                 <field name="name"/>
                 <field name="code"/>
                 <field name="pos_config_id"/>
                 <field name="warehouse_id"/>
+                <field name="is_fault_blocked"/>
+                <field name="fault_blocked_slots_count"/>
                 <field name="countdown_seconds"/>
             </list>
         </field>
@@ -21,6 +25,16 @@
         <field name="model">vending.machine</field>
         <field name="arch" type="xml">
             <form string="Máquina Expendedora">
+                <field name="is_fault_blocked" invisible="1"/>
+                <field name="has_fault_blocked_slots" invisible="1"/>
+                <field name="fault_blocked_slots_count" invisible="1"/>
+                <div class="alert alert-danger" role="alert" invisible="not is_fault_blocked">
+                    <strong>Maquina desactivada por falla.</strong>
+                </div>
+                <div class="alert alert-warning" role="alert" invisible="is_fault_blocked or not has_fault_blocked_slots">
+                    <strong>Tiene slots desactivados por falla.</strong>
+                    Cantidad: <field name="fault_blocked_slots_count" class="oe_inline"/>
+                </div>
                 <sheet>
                     <group>
                         <group string="Información General">
@@ -60,12 +74,12 @@
                     <notebook>
                         <page string="Slots">
                             <field name="slot_ids">
-                                <list editable="bottom">
+                                <list editable="bottom" decoration-danger="is_fault_blocked">
                                     <field name="code" width="150"/>
                                     <field name="name"/>
                                     <field name="product_tmpl_id"/>
                                     <field name="location_id"/>
-                                    <field name="is_active"/>
+                                    <field name="is_fault_blocked"/>
                                     <field name="current_stock"/>
                                 </list>
                             </field>
