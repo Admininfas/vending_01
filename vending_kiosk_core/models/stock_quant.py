@@ -205,6 +205,9 @@ class StockQuant(models.Model):
                     'pos_config_id': config.id,
                     'machine_id': config.vending_machine_id.id,
                     'machine_name': config.vending_machine_id.name,
+                    'machine_fault_blocked': bool(config.vending_machine_id.is_fault_blocked),
+                    'machine_has_fault_blocked_slots': bool(config.vending_machine_id.has_fault_blocked_slots),
+                    'machine_fault_blocked_slots_count': config.vending_machine_id.fault_blocked_slots_count or 0,
                     'timestamp': fields.Datetime.now().isoformat(),
                     'all_available_ids': current_products,
                 }

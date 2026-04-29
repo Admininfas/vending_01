@@ -28,6 +28,7 @@ class VendingWebhookLog(models.Model):
         ('payment_status', 'Payment Status Webhook'),
         ('delivery_status', 'Delivery Status Webhook'),
         ('load', 'Load Webhook'),
+        ('alarm', 'Alarm Webhook'),
     ], string='Endpoint', required=True, index=True, help='Tipo de webhook recibido')
     
     http_method = fields.Char(
@@ -81,6 +82,9 @@ class VendingWebhookLog(models.Model):
     # ── Auditoría liviana ──
     processing_result = fields.Selection([
         ('processed', 'Procesado'),
+        ('partial', 'Procesado parcial'),
+        ('no_change', 'Sin cambios (idempotente)'),
+        ('skipped_no_candidate', 'Omitido: sin orden correlacionable'),
         ('duplicate', 'Duplicado'),
         ('late_arrival', 'Extemporáneo'),
         ('order_not_found', 'Orden no encontrada'),
@@ -93,6 +97,37 @@ class VendingWebhookLog(models.Model):
     actions_json = fields.Text(
         string='Acciones',
         help='Resumen de acciones ejecutadas por Odoo (JSON compacto)'
+    )
+
+    # ── Campos de auditoría específicos (filtros/agrupadores) ──
+    machine_code = fields.Char(
+        string='Máquina',
+        size=64,
+        index=True,
+        help='Code de la máquina extraído del payload (útil para filtrar).'
+    )
+
+    alarm_scope = fields.Selection([
+        ('MACHINE', 'Máquina'),
+        ('SLOT', 'Slot'),
+    ], string='Alarma - Alcance', index=True,
+       help='Scope de la alarma (solo aplica al endpoint alarm).')
+
+    alarm_status = fields.Selection([
+        ('FAIL', 'FAIL'),
+        ('SUCCESS', 'SUCCESS'),
+    ], string='Alarma - Estado', index=True,
+       help='Status de la alarma (solo aplica al endpoint alarm).')
+
+    deduced_slot_code = fields.Integer(
+        string='Slot deducido',
+        help='Slot deducido automáticamente cuando el payload no lo trajo explícito.'
+    )
+
+    summary = fields.Char(
+        string='Resumen',
+        size=255,
+        help='Línea humana que describe qué hizo Odoo con este webhook.'
     )
 
     # ── Campos computados para la vista ──

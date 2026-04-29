@@ -1,6 +1,37 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <odoo>
 
+    <!-- Search View -->
+    <record id="view_vending_webhook_log_search" model="ir.ui.view">
+        <field name="name">vending.webhook.log.search</field>
+        <field name="model">vending.webhook.log</field>
+        <field name="arch" type="xml">
+            <search string="Webhook Logs">
+                <field name="reference"/>
+                <field name="machine_code"/>
+                <field name="summary"/>
+                <filter name="endpoint_alarm" string="Alarma" domain="[('endpoint', '=', 'alarm')]"/>
+                <filter name="endpoint_payment" string="Pago" domain="[('endpoint', '=', 'payment_status')]"/>
+                <filter name="endpoint_delivery" string="Entrega" domain="[('endpoint', '=', 'delivery_status')]"/>
+                <filter name="endpoint_load" string="Carga" domain="[('endpoint', '=', 'load')]"/>
+                <filter name="alarm_fail" string="Alarma FAIL" domain="[('alarm_status', '=', 'FAIL')]"/>
+                <filter name="alarm_success" string="Alarma SUCCESS" domain="[('alarm_status', '=', 'SUCCESS')]"/>
+                <filter name="alarm_scope_machine" string="Scope MACHINE" domain="[('alarm_scope', '=', 'MACHINE')]"/>
+                <filter name="alarm_scope_slot" string="Scope SLOT" domain="[('alarm_scope', '=', 'SLOT')]"/>
+                <filter name="result_processed" string="Procesado" domain="[('processing_result', '=', 'processed')]"/>
+                <filter name="result_no_change" string="Sin cambios" domain="[('processing_result', '=', 'no_change')]"/>
+                <filter name="result_skipped" string="Omitidos" domain="[('processing_result', '=', 'skipped_no_candidate')]"/>
+                <filter name="result_partial" string="Parcial" domain="[('processing_result', '=', 'partial')]"/>
+                <filter name="deduced_only" string="Con slot deducido" domain="[('deduced_slot_code', '!=', False)]"/>
+                <filter name="group_endpoint" string="Endpoint" context="{'group_by': 'endpoint'}"/>
+                <filter name="group_result" string="Resultado" context="{'group_by': 'processing_result'}"/>
+                <filter name="group_machine" string="Máquina" context="{'group_by': 'machine_code'}"/>
+                <filter name="group_alarm_scope" string="Scope" context="{'group_by': 'alarm_scope'}"/>
+                <filter name="group_alarm_status" string="Estado alarma" context="{'group_by': 'alarm_status'}"/>
+            </search>
+        </field>
+    </record>
+
     <!-- List View -->
     <record id="view_vending_webhook_log_list" model="ir.ui.view">
         <field name="name">vending.webhook.log.list</field>
@@ -8,12 +39,18 @@
         <field name="arch" type="xml">
             <list string="Webhook Logs" create="false" edit="false"
                   decoration-success="processing_result == 'processed'"
-                  decoration-warning="processing_result in ('duplicate', 'late_arrival', 'order_not_found')"
-                decoration-danger="processing_result in ('internal_error', 'validation_error', 'auth_error')">
+                  decoration-muted="processing_result in ('no_change', 'skipped_no_candidate')"
+                  decoration-warning="processing_result in ('duplicate', 'late_arrival', 'order_not_found', 'partial')"
+                  decoration-danger="processing_result in ('internal_error', 'validation_error', 'auth_error')">
                 <field name="create_date" string="Fecha/Hora"/>
                 <field name="endpoint" string="Endpoint"/>
-                <field name="reference" string="Referencia" optional="show"/>
+                <field name="machine_code" string="Máquina" optional="show"/>
+                <field name="alarm_scope" string="Alcance" optional="show"/>
+                <field name="alarm_status" string="Estado alarma" optional="show"/>
                 <field name="processing_result" string="Resultado" optional="show"/>
+                <field name="summary" string="Resumen" optional="show"/>
+                <field name="deduced_slot_code" string="Slot deducido" optional="hide"/>
+                <field name="reference" string="Referencia" optional="hide"/>
                 <field name="actions_json" string="Acciones" optional="hide"/>
                 <field name="error_message" string="Error" optional="hide"/>
                 <field name="status_code" string="HTTP" optional="hide"/>
@@ -31,18 +68,25 @@
                     <div class="oe_title">
                         <h1><field name="display_name" readonly="1"/></h1>
                     </div>
-                    
+
                     <group>
                         <group name="basic_info" string="Request">
                             <field name="create_date" string="Fecha/Hora"/>
                             <field name="endpoint"/>
+                            <field name="machine_code"/>
                             <field name="reference"/>
                             <field name="http_method"/>
                             <field name="status_code"/>
                         </group>
                         <group name="audit_info" string="Auditoría">
                             <field name="processing_result"/>
-                            <field name="actions_json" widget="text"/>
+                            <field name="summary"/>
+                            <field name="alarm_scope"
+                                   invisible="endpoint != 'alarm'"/>
+                            <field name="alarm_status"
+                                   invisible="endpoint != 'alarm'"/>
+                            <field name="deduced_slot_code"
+                                   invisible="endpoint != 'alarm' or not deduced_slot_code"/>
                         </group>
                     </group>
 
@@ -51,8 +95,11 @@
                             <field name="error_message" widget="text"/>
                         </group>
                     </group>
-                    
+
                     <notebook>
+                        <page string="Acciones" name="actions">
+                            <field name="actions_json" widget="text" readonly="1"/>
+                        </page>
                         <page string="Payload" name="payload">
                             <field name="formatted_payload" widget="text" readonly="1"/>
                         </page>
@@ -72,12 +119,13 @@
         <field name="res_model">vending.webhook.log</field>
         <field name="view_mode">list,form</field>
         <field name="view_id" ref="view_vending_webhook_log_list"/>
+        <field name="search_view_id" ref="view_vending_webhook_log_search"/>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 No hay logs de webhooks aún
             </p>
             <p>
-                Los logs se generan automáticamente cuando se reciben requests 
+                Los logs se generan automáticamente cuando se reciben requests
                 en los endpoints de webhooks de vending machines.
             </p>
             <p>
@@ -87,6 +135,7 @@
                 <li><strong>POST /v1/vending/webhook/payment_status</strong>: Estado de pago</li>
                 <li><strong>POST /v1/vending/webhook/delivery_status</strong>: Estado de entrega</li>
                 <li><strong>POST /v1/vending/webhook/load</strong>: Información de stock en slots</li>
+                <li><strong>POST /v1/vending/webhook/alarm</strong>: Alarmas de máquina y slots</li>
             </ul>
         </field>
     </record>
@@ -94,7 +143,7 @@
     <!-- Menu -->
     <menuitem
         id="menu_vending_webhook_logs"
-        name="Webhooks" 
+        name="Webhooks"
         parent="vending_kiosk_core.menu_vending_root"
         action="action_vending_webhook_log"
         sequence="30"
