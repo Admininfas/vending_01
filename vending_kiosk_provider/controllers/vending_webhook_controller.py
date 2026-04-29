@@ -38,7 +38,9 @@ LOG_SEP = "=" * 60
 # Estados de pos.order que indican que el dispatch al hardware fue disparado
 # recientemente: solo estas órdenes son candidatas plausibles para asociar
 # una alarma "error 80" sin slot explícito del proveedor.
-_ALARM_DEDUCIBLE_VENDING_STATES = ('payment_success', 'vending_delivery_error')
+# Incluye payment_error porque aunque el pago falló, la máquina sigue intentando
+# despachar en ese slot y puede generar alarmas relacionadas.
+_ALARM_DEDUCIBLE_VENDING_STATES = ('payment_success', 'payment_error', 'vending_delivery_error')
 # Ventana temporal para correlacionar alarma → orden. Más allá de esto, las
 # retransmisiones del hardware no deben pegarle a una orden posterior no
 # relacionada (que es exactamente lo que bloqueaba slots sanos en producción).
