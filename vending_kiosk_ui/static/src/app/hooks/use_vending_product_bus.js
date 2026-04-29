@@ -6,6 +6,14 @@ import { rpc } from "@web/core/network/rpc";
 
 /** Polling interval in ms – balance between freshness and server load */
 const POLL_INTERVAL_MS = 15000;
+/**
+ * Cadencia agresiva mientras el kiosko está en estado degradado
+ * (máquina marcada como bloqueada o catálogo vacío). El bus puede
+ * perderse en producción (Odoo SH + WebView Android), así que cuando
+ * sabemos que estamos esperando un cambio polleamos rápido para no
+ * dejar al kiosko atascado en la pantalla de fuera de servicio.
+ */
+const FAST_POLL_INTERVAL_MS = 3000;
 
 /**
  * Hook personalizado para suscribirse a actualizaciones de productos vending.
@@ -309,17 +317,54 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
         }
     }
 
+    function _nextPollDelay() {
+        const blocked = Boolean(vendingProducts.machineFaultBlocked);
+        const empty = !Array.isArray(vendingProducts.availableIds) || vendingProducts.availableIds.length === 0;
+        return (blocked || empty) ? FAST_POLL_INTERVAL_MS : POLL_INTERVAL_MS;
+    }
+
+    function _scheduleNextPoll() {
+        if (!isActive) {
+            return;
+        }
+        pollTimer = setTimeout(async () => {
+            pollTimer = null;
+            try {
+                await pollNow();
+            } finally {
+                _scheduleNextPoll();
+            }
+        }, _nextPollDelay());
+    }
+
     function startPolling() {
         stopPolling();
         pollNow();
-        pollTimer = setInterval(pollNow, POLL_INTERVAL_MS);
+        _scheduleNextPoll();
     }
 
     function stopPolling() {
         if (pollTimer) {
-            clearInterval(pollTimer);
+            clearTimeout(pollTimer);
             pollTimer = null;
         }
+    }
+
+    function onVisibilityChange() {
+        if (typeof document === "undefined") {
+            return;
+        }
+        if (document.visibilityState !== "visible") {
+            return;
+        }
+        if (!isActive) {
+            return;
+        }
+        // El WebView puede haber suspendido el timer mientras estuvo oculto:
+        // forzamos un poll inmediato y reprogramamos la próxima corrida.
+        stopPolling();
+        pollNow();
+        _scheduleNextPoll();
     }
 
     // ── Lifecycle ──
@@ -341,6 +386,10 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
 
         startPolling();
         // console.log(`[Vending Poll] Polling iniciado (cada ${POLL_INTERVAL_MS / 1000}s)`);
+
+        if (typeof document !== "undefined") {
+            document.addEventListener("visibilitychange", onVisibilityChange);
+        }
     });
 
     onWillUnmount(() => {
@@ -351,6 +400,9 @@ export function useVendingProductBus(selfOrder, onProductsUpdated) {
         busChannel = null;
         isActive = false;
         stopPolling();
+        if (typeof document !== "undefined") {
+            document.removeEventListener("visibilitychange", onVisibilityChange);
+        }
     });
 
     return {
