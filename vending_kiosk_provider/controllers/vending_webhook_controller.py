@@ -836,19 +836,6 @@ class VendingWebhookController(http.Controller):
             # Obtener la variante del producto
             product = slot.product_tmpl_id.product_variant_id
 
-            # Solo los productos almacenables admiten stock.quant
-            if product.detailed_type != 'product':
-                msg = (
-                    f'Product "{product.name}" in slot {slot.name} is of type '
-                    f'"{product.detailed_type}" — only storable products can have stock quants'
-                )
-                _logger.error(f"[WEBHOOK LOAD] {label}: {msg}")
-                self._log_webhook(
-                    f'{machine_code}/{slot_number}', raw_body, 'load', error_msg=msg
-                )
-                return {'status': 'error', 'http_status': 400, 'message': msg,
-                        'machine': machine_code, 'slot': slot_number}
-
             # Buscar/crear stock.quant
             quant = env['stock.quant'].sudo().search([
                 ('location_id', '=', slot.location_id.id),
