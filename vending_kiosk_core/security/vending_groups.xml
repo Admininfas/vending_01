@@ -21,5 +21,12 @@
             <field name="comment">Acceso completo incluyendo configuración técnica avanzada (timeouts, ubicaciones, journals)</field>
             <field name="implied_ids" eval="[(4, ref('vending_kiosk_core.group_vending_admin'))]"/>
         </record>
+
+        <!-- Grupo: puede forzar el refresh remoto del kiosko -->
+        <record id="group_vending_kiosk_refresh" model="res.groups">
+            <field name="name">Vending Manager - Puede refrescar kiosko</field>
+            <field name="comment">Puede pulsar el botón "Refrescar pantalla del kiosko" en el form de la máquina, que fuerza al kiosko a recargar a la raíz.</field>
+            <field name="implied_ids" eval="[(4, ref('vending_kiosk_core.group_vending_viewer'))]"/>
+        </record>
     </data>
 </odoo>

@@ -74,6 +74,31 @@ class VendingMachine(models.Model):
         compute='_compute_fault_blocked_slot_stats',
         store=True,
     )
+    kiosk_refresh_token = fields.Integer(
+        string='Token de refresh de kiosko',
+        default=0,
+        copy=False,
+        help='Contador que se incrementa cuando un operador pide refrescar el kiosko. '
+             'El frontend lo lee del polling y al detectar un cambio fuerza un reload.'
+    )
+
+    def action_refresh_kiosk_screen(self):
+        """Incrementa kiosk_refresh_token. El polling del kiosko detecta el
+        cambio (vía hash) y dispara `window.location.assign` a la raíz.
+        """
+        for machine in self:
+            machine.kiosk_refresh_token = (machine.kiosk_refresh_token or 0) + 1
+            _logger.info(
+                "[Vending] Refresh manual de kiosko solicitado para %s (token=%s) por %s",
+                machine.name, machine.kiosk_refresh_token, self.env.user.display_name,
+            )
+            machine.message_post(
+                body=_(
+                    "Refresh manual del kiosko solicitado (token #%(token)s).",
+                    token=machine.kiosk_refresh_token,
+                ),
+            )
+        return True
     countdown_seconds = fields.Integer(
         string='Tiempo de espera (segundos)',
         default=40,
@@ -340,17 +365,17 @@ class VendingMachine(models.Model):
                     'El código de la máquina debe ser único.'
                 ))
 
-    @api.constrains('code')
-    def _validate_code_format(self):
-        """
-        Valida que el código contenga solo números (opcional).
-        """
-        import re
-        for record in self:
-            if record.code and not re.match(r'^\d+$', record.code.strip()):
-                raise ValidationError(_(
-                    'El código debe contener solo números.'
-                ))
+    # @api.constrains('code')
+    # def _validate_code_format(self):
+    #     """
+    #     Valida que el código contenga solo números (opcional).
+    #     """
+    #     import re
+    #     for record in self:
+    #         if record.code and not re.match(r'^\d+$', record.code.strip()):
+    #             raise ValidationError(_(
+    #                 'El código debe contener solo números.'
+    #             ))
 
     @api.constrains('warehouse_id')
     def _check_unique_warehouse(self):

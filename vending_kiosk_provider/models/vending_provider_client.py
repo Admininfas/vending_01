@@ -4,10 +4,19 @@
 Cliente para comunicación con el proveedor de vending (Winfas).
 
 Este modelo abstrae la comunicación con la API externa de Winfas.
-La URL base se configura desde Ajustes > Parámetros del Sistema:
-- Clave: vending.provider_base_url
-- Valor: URL del proveedor (ej: https://api-v2.winfas.com.ar)
-- Si no está configurada, usa el endpoint dummy local para testing.
+Configurable desde Ajustes > Técnicos > Parámetros del Sistema:
+
+- ``vending.provider_base_url`` (obligatorio): URL base del proveedor
+  (ej: ``https://api-v2.winfas.com.ar``). Si no está configurada se lanza
+  ``UserError`` al intentar contactar al proveedor.
+- ``vending.provider_payment_endpoint`` (default ``/payment/qr``): path del
+  endpoint que genera el QR. Se le concatena ``/{machine_identifier}``.
+- ``vending.provider_status_endpoint`` (default ``/status``): path del
+  endpoint para consultar estado. Se le concatena ``/{reference}``.
+
+Modo dummy: apuntar ``vending.provider_base_url`` al controller dummy local
+(ej: ``{web.base.url}/dummy``). En ese caso el cliente cortocircuita y usa
+``_request_qr_dummy`` / ``_check_status_dummy`` sin hacer HTTP externo.
 """
 
 import json
@@ -42,29 +51,61 @@ class VendingProviderClient(models.AbstractModel):
     def _get_base_url(self):
         """
         Obtiene la URL base del proveedor desde parámetros del sistema.
-        
+
         Configurable en: Ajustes > Técnicos > Parámetros del Sistema
-        Clave: vending.provider_base_url
-        
+        Clave: ``vending.provider_base_url``
+
         Returns:
-            str: URL base (proveedor real o dummy local)
+            str: URL base sin trailing slash.
+
+        Raises:
+            UserError: si el parámetro no está configurado.
         """
         provider_url = self.env['ir.config_parameter'].sudo().get_param(
             'vending.provider_base_url', default=''
         )
-        if provider_url:
-            return provider_url.rstrip('/')
-        
-        # Sin URL configurada -> usar endpoint dummy local
-        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
-        return f"{base_url}/dummy"
+        if not provider_url:
+            raise UserError(
+                "Falta configurar el parámetro 'vending.provider_base_url' en "
+                "Ajustes → Técnicos → Parámetros del Sistema."
+            )
+        return provider_url.rstrip('/')
+
+    def _normalize_endpoint(self, path):
+        """Asegura que el path empiece con '/' y no termine con '/'."""
+        path = (path or '').strip()
+        if not path.startswith('/'):
+            path = '/' + path
+        return path.rstrip('/') or '/'
+
+    def _get_payment_endpoint(self):
+        """
+        Path del endpoint de generación de QR (sin machine_identifier).
+
+        Clave: ``vending.provider_payment_endpoint`` (default ``/payment/qr``).
+        """
+        path = self.env['ir.config_parameter'].sudo().get_param(
+            'vending.provider_payment_endpoint', default='/payment/qr'
+        )
+        return self._normalize_endpoint(path)
+
+    def _get_status_endpoint(self):
+        """
+        Path del endpoint de consulta de estado (sin reference).
+
+        Clave: ``vending.provider_status_endpoint`` (default ``/status``).
+        """
+        path = self.env['ir.config_parameter'].sudo().get_param(
+            'vending.provider_status_endpoint', default='/status'
+        )
+        return self._normalize_endpoint(path)
 
     def _is_dummy_mode(self):
-        """Retorna True si se usa el dummy provider (sin URL externa configurada)."""
+        """Retorna True si la base_url apunta al controller dummy local."""
         provider_url = self.env['ir.config_parameter'].sudo().get_param(
             'vending.provider_base_url', default=''
         )
-        return not bool(provider_url)
+        return '/dummy' in (provider_url or '')
 
     def _get_machine_by_identifier(self, machine_identifier):
         machine = self.env['vending.machine'].sudo().search([
@@ -143,10 +184,7 @@ class VendingProviderClient(models.AbstractModel):
                 timeout,
             )
 
-        qr_endpoints = [
-            f"{base_url}/payment/qr/{machine_identifier}",
-            f"{base_url}/payments/qr/{machine_identifier}",
-        ]
+        endpoint = f"{base_url}{self._get_payment_endpoint()}/{machine_identifier}"
         
         payload = {
             'reference': reference,
@@ -157,89 +195,68 @@ class VendingProviderClient(models.AbstractModel):
         }
         
         _logger.info(
-            "[PROVIDER CLIENT] Endpoint externo (prioridad): POST %s",
-            qr_endpoints[0],
+            "[PROVIDER CLIENT] Endpoint externo: POST %s",
+            endpoint,
         )
         _logger.info(f"[PROVIDER CLIENT] Payload: {json.dumps(payload)}")
         
         try:
-            last_error_msg = None
-            for index, endpoint in enumerate(qr_endpoints):
-                _logger.info("[PROVIDER CLIENT] Intento %s -> POST %s", index + 1, endpoint)
-                response = requests.post(
+            _logger.info("[PROVIDER CLIENT] Intento -> POST %s", endpoint)
+            response = requests.post(
+                endpoint,
+                json=payload,
+                headers=headers,
+                timeout=HTTP_REQUEST_TIMEOUT,
+            )
+
+            _logger.info(f"[PROVIDER CLIENT] Response status: {response.status_code}")
+            _logger.info(
+                "[PROVIDER CLIENT] Response content-type: %s",
+                response.headers.get('Content-Type', ''),
+            )
+
+            if response.status_code != 200:
+                error_msg = self._parse_error_response(response)
+                error_msg = f"Error del proveedor: {error_msg}"
+                _logger.error(
+                    "[PROVIDER CLIENT] ✗ Error en endpoint %s: %s",
                     endpoint,
-                    json=payload,
-                    headers=headers,
-                    timeout=HTTP_REQUEST_TIMEOUT,
+                    error_msg,
                 )
+                raise UserError(error_msg)
 
-                _logger.info(f"[PROVIDER CLIENT] Response status: {response.status_code}")
-                _logger.info(
-                    "[PROVIDER CLIENT] Response content-type: %s",
-                    response.headers.get('Content-Type', ''),
+            raw_body = response.text or ''
+            if not raw_body.strip():
+                _logger.error("[PROVIDER CLIENT] ✗ Respuesta 200 vacía del proveedor")
+                raise UserError("El proveedor devolvió una respuesta vacía al generar QR")
+
+            try:
+                data = response.json()
+            except ValueError:
+                body_preview = raw_body[:300].replace('\n', ' ').replace('\r', ' ')
+                _logger.error(
+                    "[PROVIDER CLIENT] ✗ Respuesta 200 no-JSON. Body preview: %s",
+                    body_preview,
                 )
+                raise UserError("El proveedor devolvió una respuesta no válida al generar QR")
 
-                if response.status_code != 200:
-                    error_msg = self._parse_error_response(response)
-                    last_error_msg = f"Error del proveedor: {error_msg}"
-                    _logger.error(
-                        "[PROVIDER CLIENT] ✗ Error en endpoint %s: %s",
-                        endpoint,
-                        error_msg,
-                    )
-                    if index == 0 and response.status_code in (404, 405):
-                        _logger.warning(
-                            "[PROVIDER CLIENT] Reintentando con endpoint alternativo por status %s",
-                            response.status_code,
-                        )
-                        continue
-                    raise UserError(last_error_msg)
+            _logger.info(f"[PROVIDER CLIENT] ✓ Response body: {json.dumps(data)[:200]}...")
 
-                raw_body = response.text or ''
-                if not raw_body.strip():
-                    last_error_msg = "El proveedor devolvió una respuesta vacía al generar QR"
-                    _logger.error("[PROVIDER CLIENT] ✗ Respuesta 200 vacía del proveedor")
-                    if index == 0:
-                        _logger.warning("[PROVIDER CLIENT] Reintentando con endpoint alternativo por body vacío")
-                        continue
-                    raise UserError(last_error_msg)
+            # Acepta formato real (data_url) y dummy (url)
+            qr_url = data.get('data_url') or data.get('url')
+            if not qr_url or 'content' not in data:
+                _logger.error(f"[PROVIDER CLIENT] ✗ Respuesta inválida: {data}")
+                raise UserError("Respuesta inválida del proveedor")
 
-                try:
-                    data = response.json()
-                except ValueError:
-                    body_preview = raw_body[:300].replace('\n', ' ').replace('\r', ' ')
-                    last_error_msg = "El proveedor devolvió una respuesta no válida al generar QR"
-                    _logger.error(
-                        "[PROVIDER CLIENT] ✗ Respuesta 200 no-JSON. Body preview: %s",
-                        body_preview,
-                    )
-                    if index == 0:
-                        _logger.warning("[PROVIDER CLIENT] Reintentando con endpoint alternativo por JSON inválido")
-                        continue
-                    raise UserError(last_error_msg)
+            _logger.info(f"[PROVIDER CLIENT] ✓ QR generado exitosamente")
+            _logger.info(f"[PROVIDER CLIENT] === FIN SOLICITUD QR ===")
+            _logger.info(f"{LOG_SEP}")
 
-                _logger.info(f"[PROVIDER CLIENT] ✓ Response body: {json.dumps(data)[:200]}...")
-
-                # Acepta formato real (data_url) y dummy (url)
-                qr_url = data.get('data_url') or data.get('url')
-                if not qr_url or 'content' not in data:
-                    _logger.error(f"[PROVIDER CLIENT] ✗ Respuesta inválida: {data}")
-                    if index == 0:
-                        _logger.warning("[PROVIDER CLIENT] Reintentando con endpoint alternativo por schema inválido")
-                        continue
-                    raise UserError("Respuesta inválida del proveedor")
-
-                _logger.info(f"[PROVIDER CLIENT] ✓ QR generado exitosamente")
-                _logger.info(f"[PROVIDER CLIENT] === FIN SOLICITUD QR ===")
-                _logger.info(f"{LOG_SEP}")
-
-                return {
-                    'url': qr_url,
-                    'content': data['content'],
-                    'timeout': timeout,
-                }
-
-            raise UserError(last_error_msg or "No se pudo generar QR con los endpoints configurados")
+            return {
+                'url': qr_url,
+                'content': data['content'],
+                'timeout': timeout,
+            }
             
         except requests.exceptions.Timeout:
             _logger.error(f"[PROVIDER CLIENT] ✗ Timeout contactando proveedor")
@@ -267,7 +284,7 @@ class VendingProviderClient(models.AbstractModel):
             }
         """
         base_url = self._get_base_url()
-        endpoint = f"{base_url}/status/{reference}"
+        endpoint = f"{base_url}{self._get_status_endpoint()}/{reference}"
         if '/dummy' in base_url:
             return self._check_status_dummy(reference)
 
