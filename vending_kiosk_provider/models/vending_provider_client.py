@@ -4,10 +4,19 @@
 Cliente para comunicación con el proveedor de vending (Winfas).
 
 Este modelo abstrae la comunicación con la API externa de Winfas.
-La URL base se configura desde Ajustes > Parámetros del Sistema:
-- Clave: vending.provider_base_url
-- Valor: URL del proveedor (ej: https://api-v2.winfas.com.ar)
-- Si no está configurada, usa el endpoint dummy local para testing.
+Configurable desde Ajustes > Técnicos > Parámetros del Sistema:
+
+- ``vending.provider_base_url`` (obligatorio): URL base del proveedor
+  (ej: ``https://api-v2.winfas.com.ar``). Si no está configurada se lanza
+  ``UserError`` al intentar contactar al proveedor.
+- ``vending.provider_payment_endpoint`` (default ``/payment/qr``): path del
+  endpoint que genera el QR. Se le concatena ``/{machine_identifier}``.
+- ``vending.provider_status_endpoint`` (default ``/status``): path del
+  endpoint para consultar estado. Se le concatena ``/{reference}``.
+
+Modo dummy: apuntar ``vending.provider_base_url`` al controller dummy local
+(ej: ``{web.base.url}/dummy``). En ese caso el cliente cortocircuita y usa
+``_request_qr_dummy`` / ``_check_status_dummy`` sin hacer HTTP externo.
 """
 
 import json
@@ -42,29 +51,61 @@ class VendingProviderClient(models.AbstractModel):
     def _get_base_url(self):
         """
         Obtiene la URL base del proveedor desde parámetros del sistema.
-        
+
         Configurable en: Ajustes > Técnicos > Parámetros del Sistema
-        Clave: vending.provider_base_url
-        
+        Clave: ``vending.provider_base_url``
+
         Returns:
-            str: URL base (proveedor real o dummy local)
+            str: URL base sin trailing slash.
+
+        Raises:
+            UserError: si el parámetro no está configurado.
         """
         provider_url = self.env['ir.config_parameter'].sudo().get_param(
             'vending.provider_base_url', default=''
         )
-        if provider_url:
-            return provider_url.rstrip('/')
-        
-        # Sin URL configurada -> usar endpoint dummy local
-        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
-        return f"{base_url}/dummy"
+        if not provider_url:
+            raise UserError(
+                "Falta configurar el parámetro 'vending.provider_base_url' en "
+                "Ajustes → Técnicos → Parámetros del Sistema."
+            )
+        return provider_url.rstrip('/')
+
+    def _normalize_endpoint(self, path):
+        """Asegura que el path empiece con '/' y no termine con '/'."""
+        path = (path or '').strip()
+        if not path.startswith('/'):
+            path = '/' + path
+        return path.rstrip('/') or '/'
+
+    def _get_payment_endpoint(self):
+        """
+        Path del endpoint de generación de QR (sin machine_identifier).
+
+        Clave: ``vending.provider_payment_endpoint`` (default ``/payment/qr``).
+        """
+        path = self.env['ir.config_parameter'].sudo().get_param(
+            'vending.provider_payment_endpoint', default='/payment/qr'
+        )
+        return self._normalize_endpoint(path)
+
+    def _get_status_endpoint(self):
+        """
+        Path del endpoint de consulta de estado (sin reference).
+
+        Clave: ``vending.provider_status_endpoint`` (default ``/status``).
+        """
+        path = self.env['ir.config_parameter'].sudo().get_param(
+            'vending.provider_status_endpoint', default='/status'
+        )
+        return self._normalize_endpoint(path)
 
     def _is_dummy_mode(self):
-        """Retorna True si se usa el dummy provider (sin URL externa configurada)."""
+        """Retorna True si la base_url apunta al controller dummy local."""
         provider_url = self.env['ir.config_parameter'].sudo().get_param(
             'vending.provider_base_url', default=''
         )
-        return not bool(provider_url)
+        return '/dummy' in (provider_url or '')
 
     def _get_machine_by_identifier(self, machine_identifier):
         machine = self.env['vending.machine'].sudo().search([
@@ -143,7 +184,7 @@ class VendingProviderClient(models.AbstractModel):
                 timeout,
             )
 
-        endpoint = f"{base_url}/payments/qr/{machine_identifier}"
+        endpoint = f"{base_url}{self._get_payment_endpoint()}/{machine_identifier}"
         
         payload = {
             'reference': reference,
@@ -243,7 +284,7 @@ class VendingProviderClient(models.AbstractModel):
             }
         """
         base_url = self._get_base_url()
-        endpoint = f"{base_url}/status/{reference}"
+        endpoint = f"{base_url}{self._get_status_endpoint()}/{reference}"
         if '/dummy' in base_url:
             return self._check_status_dummy(reference)
 

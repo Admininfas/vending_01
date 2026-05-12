@@ -474,6 +474,7 @@ class VendingQrController(http.Controller):
         machine_fault_blocked = bool(machine.is_fault_blocked)
         machine_has_fault_blocked_slots = bool(machine.has_fault_blocked_slots)
         machine_fault_blocked_slots_count = machine.fault_blocked_slots_count or 0
+        kiosk_refresh_token = int(getattr(machine, 'kiosk_refresh_token', 0) or 0)
         product_meta = self._build_product_meta_for_poll(
             config,
             product_ids,
@@ -498,7 +499,7 @@ class VendingQrController(http.Controller):
                 value.get('min_slot_code') or 0,
             )
             for key, value in product_meta.items()
-        )) + str((machine_fault_blocked, machine_has_fault_blocked_slots, machine_fault_blocked_slots_count))
+        )) + str((machine_fault_blocked, machine_has_fault_blocked_slots, machine_fault_blocked_slots_count, kiosk_refresh_token))
         server_hash = hashlib.md5(raw.encode()).hexdigest()
 
         if server_hash == client_hash:
@@ -512,6 +513,7 @@ class VendingQrController(http.Controller):
                 'machine_fault_blocked': machine_fault_blocked,
                 'machine_has_fault_blocked_slots': machine_has_fault_blocked_slots,
                 'machine_fault_blocked_slots_count': machine_fault_blocked_slots_count,
+                'kiosk_refresh_token': kiosk_refresh_token,
             }
 
         return {

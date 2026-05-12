@@ -484,10 +484,16 @@ class VendingWebhookController(http.Controller):
                 processed_slot_codes = sorted(machine.slot_ids.mapped('code'))
                 slots_changed_codes = sorted(slots_to_update.mapped('code'))
                 slots_unchanged_codes = sorted(slots_already_ok.mapped('code'))
-                should_notify = bool(machine_changed or slots_to_update)
-                processing_result = 'processed' if should_notify else 'no_change'
+                state_changed = bool(machine_changed or slots_to_update)
+                # En SUCCESS reemitimos el bus aunque sea idempotente: el
+                # firmware reenvía SUCCESS varias veces y queremos que cada
+                # reintento le dé otra chance al kiosko de salir de la
+                # pantalla de fuera de servicio si la primera notificación
+                # se perdió (típico en Odoo SH + WebView Android).
+                should_notify = state_changed or not machine_blocked
+                processing_result = 'processed' if state_changed else 'no_change'
 
-                if should_notify:
+                if state_changed:
                     verb = 'bloqueada' if machine_blocked else 'reactivada'
                     summary = (
                         f"Máquina {machine_code} {verb}"

@@ -15,17 +15,18 @@ class PosConfig(models.Model):
     vending_is_dummy_mode = fields.Boolean(
         string='Modo Dummy activo',
         compute='_compute_vending_is_dummy_mode',
-        help='Indica si el proveedor de pagos está usando el endpoint dummy local '
-             'en lugar de Winfas. Configure vending.provider_base_url en '
-             'Parámetros del Sistema para desactivar.',
+        help='Indica si el proveedor de pagos está apuntando al endpoint dummy '
+             'local (vending.provider_base_url contiene "/dummy"). Configure '
+             'una URL real (ej: https://api-v2.winfas.com.ar) en Parámetros '
+             'del Sistema para desactivar.',
     )
 
     @api.depends('vending_machine_id')
     def _compute_vending_is_dummy_mode(self):
-        """Calcula si el proveedor opera en modo dummy (sin URL externa)."""
+        """Dummy = base_url apunta explícitamente al controller dummy local."""
         provider_url = self.env['ir.config_parameter'].sudo().get_param(
             'vending.provider_base_url', default='',
         )
-        is_dummy = not bool(provider_url)
+        is_dummy = '/dummy' in (provider_url or '')
         for record in self:
             record.vending_is_dummy_mode = is_dummy

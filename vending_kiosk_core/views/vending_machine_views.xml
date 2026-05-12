@@ -25,6 +25,14 @@
         <field name="model">vending.machine</field>
         <field name="arch" type="xml">
             <form string="Máquina Expendedora">
+                <header>
+                    <button name="action_refresh_kiosk_screen"
+                            string="Refrescar pantalla del kiosko"
+                            type="object"
+                            class="btn-primary"
+                            confirm="¿Querés forzar al kiosko de esta máquina a recargar la pantalla y volver a la raíz? Cualquier acción del usuario en curso se perderá."
+                            groups="vending_kiosk_core.group_vending_kiosk_refresh"/>
+                </header>
                 <field name="is_fault_blocked" invisible="1"/>
                 <field name="has_fault_blocked_slots" invisible="1"/>
                 <field name="fault_blocked_slots_count" invisible="1"/>
@@ -86,6 +94,7 @@
                         </page>
                     </notebook>
                 </sheet>
+                <chatter/>
             </form>
         </field>
     </record>
